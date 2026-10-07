@@ -1,0 +1,23 @@
+plugins {
+    id("com.android.library")
+}
+
+android {
+    namespace = "org.amnezia.awg.tunnel"
+    compileSdk = 36
+
+    defaultConfig {
+        minSdk = 24
+    }
+
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
+    }
+}
+
+dependencies {
+    implementation("androidx.annotation:annotation:1.9.1")
+    implementation("androidx.collection:collection:1.5.0")
+    compileOnly("com.google.code.findbugs:jsr305:3.0.2")
+}

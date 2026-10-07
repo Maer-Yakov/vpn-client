@@ -2,6 +2,7 @@ package app.vpnadmin.client
 
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.util.Base64
@@ -82,7 +83,7 @@ class KeyImportTest {
             )
         val error = runCatching { KeyImport.parse(panelVpnUri(json.toString())) }.exceptionOrNull()
         assertTrue(error is IllegalArgumentException)
-        assertTrue(error?.message.orEmpty().contains("AmneziaWG"))
+        assertTrue(error?.message.orEmpty().contains("не поддерживается"))
     }
 
     private fun panelVpnUri(json: String): String {
@@ -100,5 +101,12 @@ class KeyImportTest {
         payload[3] = raw.size.toByte()
         System.arraycopy(compressed, 0, payload, 4, written)
         return "vpn://" + Base64.getUrlEncoder().withoutPadding().encodeToString(payload)
+    }
+
+    @Test
+    fun recognizesQrPayload() {
+        assertTrue(looksLikeVpnKey("prefix vpn://abc"))
+        assertTrue(looksLikeVpnKey("[Interface]\nPrivateKey = a\n[Peer]\n"))
+        assertFalse(looksLikeVpnKey("https://example.com"))
     }
 }

@@ -7,6 +7,7 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -43,6 +44,7 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.style.TextAlign
@@ -58,6 +60,7 @@ fun HomeScreen(
     onServers: () -> Unit,
     onSettings: () -> Unit,
     onAdd: () -> Unit,
+    onSupport: () -> Unit,
 ) {
     val active = ui.active
     val connected = ui.phase == Phase.Connected
@@ -126,11 +129,6 @@ fun HomeScreen(
             if (active == null) {
                 PanelCard(onClick = onAdd) {
                     Text("Добавить сервер", color = PanelColors.text, fontWeight = FontWeight.SemiBold)
-                    Text(
-                        "Вставьте ключ vpn:// из панели",
-                        color = PanelColors.muted,
-                        fontSize = 13.sp,
-                    )
                 }
             } else {
                 PanelCard(onClick = onServers) {
@@ -144,7 +142,7 @@ fun HomeScreen(
                                 overflow = TextOverflow.Ellipsis,
                             )
                             Text(
-                                "${active.key.protocol} · ${active.key.endpoint}",
+                                active.key.endpoint,
                                 color = PanelColors.muted,
                                 fontSize = 13.sp,
                                 maxLines = 1,
@@ -157,6 +155,9 @@ fun HomeScreen(
             }
             ui.error?.let {
                 Text(it, color = PanelColors.danger, fontSize = 13.sp, modifier = Modifier.padding(top = 10.dp))
+            }
+            TextButton(onClick = onSupport, modifier = Modifier.align(Alignment.CenterHorizontally)) {
+                Text("Чат поддержки", color = PanelColors.accent)
             }
         }
     }
@@ -185,7 +186,7 @@ fun ServersScreen(
                 verticalArrangement = Arrangement.spacedBy(10.dp),
             ) {
                 if (ui.servers.isEmpty()) {
-                    Text("Список пуст. Добавьте ключ из панели.", color = PanelColors.muted)
+                    Text("Список пуст", color = PanelColors.muted)
                 }
                 ui.servers.forEach { server ->
                     val selected = server.id == ui.activeId
@@ -216,7 +217,6 @@ fun ServersScreen(
                                 Text("выбран", color = PanelColors.accent, fontSize = 12.sp)
                             }
                         }
-                        Text(server.key.protocol, color = PanelColors.accent, fontSize = 13.sp)
                         Text(server.key.endpoint, color = PanelColors.muted, fontSize = 13.sp)
                         TextButton(onClick = { onDelete(server.id) }) {
                             Text("Удалить", color = PanelColors.danger)
@@ -249,6 +249,7 @@ fun ImportScreen(
     onPaste: (String) -> Unit,
     onEmptyClipboard: () -> Unit,
     onOpenFile: () -> Unit,
+    onScan: () -> Unit,
     onSave: () -> Unit,
 ) {
     val clipboard = LocalClipboardManager.current
@@ -262,17 +263,13 @@ fun ImportScreen(
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             TopBar(title = "Новый сервер", action = "Назад", onAction = onBack)
-            Text(
-                "Вставьте сообщение из панели со ссылкой vpn:// или текст файла .conf.",
-                color = PanelColors.muted,
-                fontSize = 14.sp,
-            )
+            GhostButton("Сканировать QR", onScan)
             OutlinedTextField(
                 value = ui.draft,
                 onValueChange = onDraft,
                 modifier = Modifier.fillMaxWidth(),
                 minLines = 6,
-                placeholder = { Text("vpn://…") },
+                placeholder = { Text("Вставьте ключ") },
                 colors = fieldColors(),
                 keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.None),
             )
@@ -298,7 +295,7 @@ fun ImportScreen(
 }
 
 @Composable
-fun SettingsScreen(ui: UiState, version: String, onBack: () -> Unit) {
+fun SettingsScreen(ui: UiState, version: String, onBack: () -> Unit, onSupport: () -> Unit) {
     val key = ui.active?.key
     Scaffold(containerColor = PanelColors.bg) { padding ->
         Column(
@@ -314,35 +311,28 @@ fun SettingsScreen(ui: UiState, version: String, onBack: () -> Unit) {
                 Text("Сервер не выбран.", color = PanelColors.muted)
             } else {
                 SettingRow("Сервер", key.title)
-                SettingRow("Протокол", key.protocol)
-                SettingRow("Адрес сервера", key.endpoint)
-                SettingRow("Адрес в сети", key.address)
-                SettingRow("DNS", key.dns)
+                SettingRow("Адрес", key.endpoint)
             }
             SettingRow("Версия", version)
-            Text(
-                "Клиент подключается к вашему серверу ключом из панели. Установщик контейнеров и чужие протоколы здесь не используются.",
-                color = PanelColors.muted,
-                fontSize = 13.sp,
-                modifier = Modifier.padding(top = 8.dp),
-            )
+            SupportLink(onSupport)
         }
     }
 }
 
 @Composable
-private fun TopBar(title: String, action: String, onAction: () -> Unit) {
+internal fun TopBar(title: String, action: String, onAction: () -> Unit) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .padding(bottom = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Box(
+        Image(
+            painter = painterResource(R.drawable.ic_logo),
+            contentDescription = null,
             modifier = Modifier
-                .size(10.dp)
-                .clip(CircleShape)
-                .background(PanelColors.accent),
+                .size(36.dp)
+                .clip(RoundedCornerShape(8.dp)),
         )
         Spacer(Modifier.width(10.dp))
         Text(title, color = PanelColors.text, fontSize = 22.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
@@ -445,6 +435,22 @@ private fun PanelCard(onClick: () -> Unit, content: @Composable () -> Unit) {
 }
 
 @Composable
+private fun SupportLink(onClick: () -> Unit) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .background(PanelColors.panel)
+            .border(1.dp, PanelColors.line, RoundedCornerShape(12.dp))
+            .clickable(onClick = onClick)
+            .padding(14.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        Text("Чат поддержки", color = PanelColors.text, fontWeight = FontWeight.SemiBold)
+    }
+}
+
+@Composable
 private fun SettingRow(label: String, value: String) {
     Column(
         modifier = Modifier
@@ -460,7 +466,7 @@ private fun SettingRow(label: String, value: String) {
 }
 
 @Composable
-private fun GhostButton(label: String, onClick: () -> Unit) {
+internal fun GhostButton(label: String, onClick: () -> Unit) {
     TextButton(
         onClick = onClick,
         modifier = Modifier

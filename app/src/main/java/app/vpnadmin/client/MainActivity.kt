@@ -45,6 +45,7 @@ class MainActivity : ComponentActivity() {
                         onServers = { model.show(Screen.Servers) },
                         onSettings = { model.show(Screen.Settings) },
                         onAdd = { model.show(Screen.Import) },
+                        onSupport = ::openSupport,
                     )
                     Screen.Servers -> ServersScreen(
                         ui = ui,
@@ -60,12 +61,18 @@ class MainActivity : ComponentActivity() {
                         onPaste = model::updateDraft,
                         onEmptyClipboard = { model.report("Буфер обмена пуст") },
                         onOpenFile = { openKey.launch(arrayOf("text/plain", "application/octet-stream", "*/*")) },
+                        onScan = { model.show(Screen.Scan) },
                         onSave = { model.importText(ui.draft) },
+                    )
+                    Screen.Scan -> QrScanScreen(
+                        onBack = { model.show(Screen.Import) },
+                        onResult = model::importText,
                     )
                     Screen.Settings -> SettingsScreen(
                         ui = ui,
                         version = BuildConfig.VERSION_NAME,
                         onBack = { model.show(Screen.Home) },
+                        onSupport = ::openSupport,
                     )
                 }
             }
@@ -76,6 +83,12 @@ class MainActivity : ComponentActivity() {
         super.onNewIntent(intent)
         setIntent(intent)
         consumeIntent(intent)
+    }
+
+    private fun openSupport() {
+        if (!SupportChat.open(this)) {
+            model.report("Не удалось открыть чат поддержки")
+        }
     }
 
     private fun requestConnect() {

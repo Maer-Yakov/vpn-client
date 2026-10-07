@@ -20,13 +20,13 @@ object KeyImport {
     fun parse(raw: String): ImportedKey {
         val text = raw.trim().removePrefix("\uFEFF")
         if (text.isEmpty()) {
-            throw IllegalArgumentException("Вставьте ключ vpn:// или текст конфигурации")
+            throw IllegalArgumentException("Вставьте ключ")
         }
         val uri = vpnUri.find(text)?.value
         val decoded = if (uri != null) decodeVpnUri(uri) else null
         val conf = (decoded?.second ?: text).trim().replace("\r\n", "\n")
         if (!conf.contains("[Interface]", ignoreCase = true) || !conf.contains("[Peer]", ignoreCase = true)) {
-            throw IllegalArgumentException("Нужен ключ vpn:// из панели или файл AmneziaWG (.conf)")
+            throw IllegalArgumentException("Ключ не распознан")
         }
         requireField(conf, "PrivateKey")
         requireField(conf, "Address")
@@ -53,17 +53,17 @@ object KeyImport {
         val bytes = try {
             Base64.getUrlDecoder().decode(payload)
         } catch (_: IllegalArgumentException) {
-            throw IllegalArgumentException("Ключ vpn:// повреждён")
+            throw IllegalArgumentException("Ключ повреждён")
         }
         if (bytes.size < 5) {
-            throw IllegalArgumentException("Ключ vpn:// повреждён")
+            throw IllegalArgumentException("Ключ повреждён")
         }
         val rawLen = ((bytes[0].toInt() and 0xff) shl 24) or
             ((bytes[1].toInt() and 0xff) shl 16) or
             ((bytes[2].toInt() and 0xff) shl 8) or
             (bytes[3].toInt() and 0xff)
         if (rawLen !in 1..1_000_000) {
-            throw IllegalArgumentException("Ключ vpn:// повреждён")
+            throw IllegalArgumentException("Ключ повреждён")
         }
         val inflater = Inflater()
         try {
@@ -76,14 +76,14 @@ object KeyImport {
                 offset += count
             }
             if (offset != rawLen) {
-                throw IllegalArgumentException("Ключ vpn:// повреждён")
+                throw IllegalArgumentException("Ключ повреждён")
             }
             val json = String(out, Charsets.UTF_8)
             return extractConf(json)
         } catch (error: IllegalArgumentException) {
             throw error
         } catch (_: Exception) {
-            throw IllegalArgumentException("Ключ vpn:// повреждён")
+            throw IllegalArgumentException("Ключ повреждён")
         } finally {
             inflater.end()
         }
@@ -93,11 +93,11 @@ object KeyImport {
         val root = try {
             JSONObject(json)
         } catch (_: Exception) {
-            throw IllegalArgumentException("Ключ vpn:// повреждён")
+            throw IllegalArgumentException("Ключ повреждён")
         }
         val title = root.optString("description").trim().ifBlank { root.optString("name").trim() }
         val containers = root.optJSONArray("containers")
-            ?: throw IllegalArgumentException("В ключе нет конфигурации сервера")
+            ?: throw IllegalArgumentException("Ключ не распознан")
         var bestRank = Int.MAX_VALUE
         var bestConf = ""
         for (index in 0 until containers.length()) {
@@ -120,14 +120,14 @@ object KeyImport {
             }
         }
         if (bestConf.isBlank() || bestRank > 1) {
-            throw IllegalArgumentException("Это приложение подключается по AmneziaWG. В ключе нет такого протокола.")
+            throw IllegalArgumentException("Этот ключ не поддерживается")
         }
         return title to bestConf
     }
 
     private fun requireField(conf: String, name: String) {
         if (field(conf, name).isBlank()) {
-            throw IllegalArgumentException("В конфигурации нет поля $name")
+            throw IllegalArgumentException("В ключе не хватает данных")
         }
     }
 

@@ -26,6 +26,7 @@ enum class Screen {
     Home,
     Servers,
     Import,
+    Scan,
     Settings,
 }
 
@@ -161,7 +162,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     connectedSince = null,
                 )
             } catch (error: IllegalArgumentException) {
-                state.value = state.value.copy(screen = Screen.Import, error = error.message)
+                state.value = state.value.copy(screen = Screen.Import, draft = raw, error = error.message)
             }
         }
     }
@@ -281,14 +282,14 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             return when (error.reason) {
                 BackendException.Reason.VPN_NOT_AUTHORIZED -> "Разрешите создание VPN-подключения"
                 BackendException.Reason.DNS_RESOLUTION_FAILURE -> "Не удалось найти адрес сервера"
-                BackendException.Reason.UNABLE_TO_START_VPN -> "Служба VPN не запустилась. Откройте приложение и попробуйте снова"
-                BackendException.Reason.TUN_CREATION_ERROR -> "Система не создала VPN-интерфейс"
-                BackendException.Reason.GO_ACTIVATION_ERROR_CODE -> "Туннель не запустился. Проверьте ключ из панели"
+                BackendException.Reason.UNABLE_TO_START_VPN -> "Не удалось запустить подключение"
+                BackendException.Reason.TUN_CREATION_ERROR -> "Не удалось создать подключение"
+                BackendException.Reason.GO_ACTIVATION_ERROR_CODE -> "Не удалось подключиться. Проверьте ключ"
                 else -> "Не удалось подключиться"
             }
         }
         if (error is BadConfigException) {
-            return "Конфигурация не подошла для AmneziaWG"
+            return "Ключ не подошёл"
         }
         return error.message?.takeIf { it.isNotBlank() } ?: "Не удалось подключиться"
     }

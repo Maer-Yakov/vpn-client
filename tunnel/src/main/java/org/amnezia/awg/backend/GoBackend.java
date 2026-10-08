@@ -11,6 +11,7 @@ import android.os.Build;
 import android.os.ParcelFileDescriptor;
 import android.system.OsConstants;
 import android.util.Log;
+import android.net.IpPrefix;
 
 import org.amnezia.awg.backend.BackendException.Reason;
 import org.amnezia.awg.backend.Tunnel.State;
@@ -19,12 +20,17 @@ import org.amnezia.awg.config.Config;
 import org.amnezia.awg.config.InetEndpoint;
 import org.amnezia.awg.config.InetNetwork;
 import org.amnezia.awg.config.Peer;
+import org.amnezia.awg.config.RouteExclusions;
 import org.amnezia.awg.crypto.Key;
 import org.amnezia.awg.crypto.KeyFormatException;
 import org.amnezia.awg.util.NonNullForAll;
 
 import java.net.InetAddress;
+import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
+import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.FutureTask;
@@ -48,6 +54,7 @@ public final class GoBackend implements Backend {
     @Nullable private static AlwaysOnCallback alwaysOnCallback;
     private static GhettoCompletableFuture<VpnService> vpnService = new GhettoCompletableFuture<>();
     private final Context context;
+    private Set<InetNetwork> routeExclusions = Collections.emptySet();
     @Nullable private Config currentConfig;
     @Nullable private Tunnel currentTunnel;
     private int currentTunnelHandle = -1;
@@ -62,6 +69,10 @@ public final class GoBackend implements Backend {
     public GoBackend(final Context context) {
         SharedLibraryLoader.loadSharedLibrary(context, "wg-go");
         this.context = context;
+    }
+
+    public void setRouteExclusions(final Collection<InetNetwork> routes) {
+        routeExclusions = Collections.unmodifiableSet(new LinkedHashSet<>(routes));
     }
 
     /**
@@ -392,12 +403,22 @@ public final class GoBackend implements Backend {
                 builder.addSearchDomain(dnsSearchDomain);
 
             boolean sawDefaultRoute = false;
+            final List<InetNetwork> allowedRoutes = new ArrayList<>();
             for (final Peer peer : config.getPeers()) {
                 for (final InetNetwork addr : peer.getAllowedIps()) {
                     if (addr.getMask() == 0)
                         sawDefaultRoute = true;
-                    builder.addRoute(addr.getAddress(), addr.getMask());
+                    allowedRoutes.add(addr);
                 }
+            }
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                for (final InetNetwork route : allowedRoutes)
+                    builder.addRoute(route.getAddress(), route.getMask());
+                for (final InetNetwork exclusion : routeExclusions)
+                    builder.excludeRoute(new IpPrefix(exclusion.getAddress(), exclusion.getMask()));
+            } else {
+                for (final InetNetwork route : RouteExclusions.subtract(allowedRoutes, routeExclusions))
+                    builder.addRoute(route.getAddress(), route.getMask());
             }
 
             // "Kill-switch" semantics

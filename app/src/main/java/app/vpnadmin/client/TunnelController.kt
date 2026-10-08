@@ -22,15 +22,26 @@ class TunnelController(app: Application) {
     @Volatile
     var listener: ((Tunnel.State) -> Unit)? = null
 
-    fun connect(conf: String) {
-        val parsed = Config.parse(ByteArrayInputStream(conf.toByteArray(Charsets.UTF_8)))
-        config = parsed
-        backend.setState(tunnel, Tunnel.State.UP, parsed)
+    fun connect(conf: String, splitTunnel: SplitTunnelSettings = SplitTunnelSettings()) {
+        val routedConf = splitTunnel.applyTo(conf)
+        val parsed = Config.parse(ByteArrayInputStream(routedConf.toByteArray(Charsets.UTF_8)))
+        val exclusions = SiteRouteResolver.resolve(splitTunnel.bypassDomains)
+        backend.setRouteExclusions(exclusions)
+        try {
+            backend.setState(tunnel, Tunnel.State.UP, parsed)
+            config = parsed
+        } finally {
+            backend.setRouteExclusions(emptySet())
+        }
     }
 
     fun disconnect() {
-        backend.setState(tunnel, Tunnel.State.DOWN, null)
-        config = null
+        try {
+            backend.setState(tunnel, Tunnel.State.DOWN, null)
+        } finally {
+            backend.setRouteExclusions(emptySet())
+            config = null
+        }
     }
 
     fun isUp(): Boolean = backend.getState(tunnel) == Tunnel.State.UP

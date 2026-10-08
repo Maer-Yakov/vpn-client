@@ -10,6 +10,14 @@ import java.util.zip.Deflater
 
 class KeyImportTest {
     @Test
+    fun rejectsOversizedSharedPayload() {
+        val error = runCatching { KeyImport.parse("x".repeat(512 * 1024 + 1)) }.exceptionOrNull()
+
+        assertTrue(error is IllegalArgumentException)
+        assertTrue(error?.message.orEmpty().contains("слишком большой"))
+    }
+
+    @Test
     fun decodesPanelVpnUri() {
         val conf = """
             # Дом

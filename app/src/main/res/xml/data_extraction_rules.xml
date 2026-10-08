@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<data-extraction-rules>
+    <cloud-backup>
+        <exclude domain="file" path="servers.json" />
+        <exclude domain="file" path="servers.json.tmp" />
+        <exclude domain="file" path="servers.json.corrupt" />
+        <exclude domain="file" path="profile.conf" />
+        <exclude domain="file" path="profile.title" />
+    </cloud-backup>
+    <device-transfer>
+        <exclude domain="file" path="servers.json" />
+        <exclude domain="file" path="servers.json.tmp" />
+        <exclude domain="file" path="servers.json.corrupt" />
+        <exclude domain="file" path="profile.conf" />
+        <exclude domain="file" path="profile.title" />
+    </device-transfer>
+</data-extraction-rules>

@@ -6,6 +6,7 @@ import android.util.Size
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.camera.core.CameraSelector
+import androidx.camera.core.ExperimentalGetImage
 import androidx.camera.core.ImageAnalysis
 import androidx.camera.core.Preview
 import androidx.camera.core.resolutionselector.ResolutionSelector
@@ -107,6 +108,7 @@ fun QrScanScreen(onBack: () -> Unit, onResult: (String) -> Unit) {
 }
 
 @Composable
+@androidx.annotation.OptIn(markerClass = [ExperimentalGetImage::class])
 private fun CameraPreview(onResult: (String) -> Unit, onError: () -> Unit) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current

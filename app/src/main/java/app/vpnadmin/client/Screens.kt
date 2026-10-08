@@ -19,23 +19,35 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Checkbox
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExposedDropdownMenuBox
+import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -45,12 +57,17 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.viewinterop.AndroidView
+import android.widget.ImageView
 
 @Composable
 fun HomeScreen(
@@ -64,6 +81,10 @@ fun HomeScreen(
 ) {
     val active = ui.active
     val connected = ui.phase == Phase.Connected
+    val splitEnabled = active?.splitTunnel?.let { settings ->
+        settings.bypassDomains.isNotEmpty() ||
+            (settings.mode != AppRouteMode.AllTraffic && settings.packages.any(SplitTunnelSettings::isValidPackageName))
+    } == true
     Scaffold(containerColor = PanelColors.bg) { padding ->
         Column(
             modifier = Modifier
@@ -71,7 +92,12 @@ fun HomeScreen(
                 .padding(padding)
                 .padding(horizontal = 20.dp, vertical = 12.dp),
         ) {
-            TopBar(title = "VPN", action = "Настройки", onAction = onSettings)
+            TopBar(
+                title = "VPN",
+                action = "Настройки",
+                onAction = onSettings,
+                splitTunnelEnabled = splitEnabled,
+            )
             Column(
                 modifier = Modifier
                     .weight(1f)
@@ -295,7 +321,13 @@ fun ImportScreen(
 }
 
 @Composable
-fun SettingsScreen(ui: UiState, version: String, onBack: () -> Unit, onSupport: () -> Unit) {
+fun SettingsScreen(
+    ui: UiState,
+    version: String,
+    onBack: () -> Unit,
+    onSupport: () -> Unit,
+    onSplitTunnel: () -> Unit,
+) {
     val key = ui.active?.key
     Scaffold(containerColor = PanelColors.bg) { padding ->
         Column(
@@ -314,13 +346,222 @@ fun SettingsScreen(ui: UiState, version: String, onBack: () -> Unit, onSupport: 
                 SettingRow("Адрес", key.endpoint)
             }
             SettingRow("Версия", version)
+            PanelCard(onClick = onSplitTunnel) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("Раздельное туннелирование", color = PanelColors.text, fontWeight = FontWeight.SemiBold)
+                        Text("Маршрутизация выбранных приложений", color = PanelColors.muted, fontSize = 13.sp)
+                    }
+                    Text("›", color = PanelColors.muted, fontSize = 22.sp)
+                }
+            }
+            ui.error?.let { Text(it, color = PanelColors.danger, fontSize = 13.sp) }
             SupportLink(onSupport)
         }
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-internal fun TopBar(title: String, action: String, onAction: () -> Unit) {
+fun SplitTunnelScreen(
+    ui: UiState,
+    onBack: () -> Unit,
+    onSplitMode: (AppRouteMode) -> Unit,
+    onToggleSplitApp: (String, Boolean) -> Unit,
+    onAddBypassDomain: (String) -> Boolean,
+    onRemoveBypassDomain: (String) -> Unit,
+) {
+    var appFilter by remember { mutableStateOf("") }
+    var siteDraft by remember { mutableStateOf("") }
+    var expanded by remember { mutableStateOf(false) }
+    val active = ui.active
+    val splitSettings = active?.splitTunnel ?: SplitTunnelSettings()
+    val canEditSplit = ui.phase == Phase.Idle && active != null
+    val missingApps = if (ui.installedAppsLoaded) {
+        splitSettings.packages
+            .filterNot { packageName -> ui.installedApps.any { it.packageName == packageName } }
+            .map { packageName -> InstalledApp(packageName, "Не установлено") }
+    } else {
+        emptyList()
+    }
+    val visibleApps = (ui.installedApps + missingApps).filter { app ->
+        app.label.contains(appFilter, ignoreCase = true) ||
+            app.packageName.contains(appFilter, ignoreCase = true)
+    }
+    Scaffold(containerColor = PanelColors.bg) { padding ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding)
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 20.dp, vertical = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            TopBar(title = "Раздельное туннелирование", action = "Назад", onAction = onBack)
+            Text(
+                "Для сервера: ${active?.key?.title ?: "не выбран"}",
+                color = PanelColors.muted,
+                fontSize = 13.sp,
+            )
+            Text(
+                "Режим приложений действует только для этого сервера. Добавленные ниже сайты всегда идут в обход VPN.",
+                color = PanelColors.muted,
+                fontSize = 13.sp,
+            )
+            if (!canEditSplit) {
+                Text("Отключите VPN и выберите сервер для изменения настроек.", color = PanelColors.muted, fontSize = 13.sp)
+            }
+            AppRouteMode.entries.forEach { mode ->
+                val title = when (mode) {
+                    AppRouteMode.AllTraffic -> "Весь трафик через VPN"
+                    AppRouteMode.SelectedThroughVpn -> "Только выбранные приложения через VPN"
+                    AppRouteMode.SelectedBypassVpn -> "Выбранные приложения в обход VPN"
+                }
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(10.dp))
+                        .selectable(
+                            selected = splitSettings.mode == mode,
+                            enabled = canEditSplit,
+                            role = Role.RadioButton,
+                            onClick = { onSplitMode(mode) },
+                        )
+                        .padding(horizontal = 8.dp, vertical = 2.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    RadioButton(selected = splitSettings.mode == mode, onClick = null, enabled = canEditSplit)
+                    Text(title, color = PanelColors.text, fontSize = 14.sp, modifier = Modifier.padding(start = 8.dp))
+                }
+            }
+            if (splitSettings.mode != AppRouteMode.AllTraffic) {
+                if (ui.installedApps.isEmpty()) {
+                    val message = if (ui.installedAppsLoaded) {
+                        "Приложения с ярлыками не найдены"
+                    } else {
+                        "Список приложений загружается…"
+                    }
+                    Text(message, color = PanelColors.muted, fontSize = 13.sp)
+                }
+                ExposedDropdownMenuBox(
+                    expanded = expanded,
+                    onExpandedChange = { if (canEditSplit) expanded = !expanded },
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    OutlinedTextField(
+                        value = if (splitSettings.packages.isEmpty()) {
+                            "Выберите приложения"
+                        } else {
+                            "Выбрано: ${splitSettings.packages.size}"
+                        },
+                        onValueChange = {},
+                        readOnly = true,
+                        enabled = canEditSplit,
+                        label = { Text("Приложения") },
+                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
+                        modifier = Modifier.menuAnchor().fillMaxWidth(),
+                        colors = fieldColors(),
+                    )
+                    ExposedDropdownMenu(
+                        expanded = expanded,
+                        onDismissRequest = { expanded = false },
+                        modifier = Modifier.heightIn(max = 520.dp),
+                    ) {
+                        OutlinedTextField(
+                            value = appFilter,
+                            onValueChange = { appFilter = it },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 12.dp, vertical = 6.dp),
+                            singleLine = true,
+                            placeholder = { Text("Поиск приложения") },
+                            colors = fieldColors(),
+                            keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.None),
+                        )
+                        visibleApps.forEach { app ->
+                            DropdownMenuItem(
+                                text = {
+                                    Column {
+                                        Text(app.label, color = PanelColors.text)
+                                        Text(app.packageName, color = PanelColors.muted, fontSize = 11.sp)
+                                    }
+                                },
+                                leadingIcon = { InstalledAppIcon(app) },
+                                trailingIcon = {
+                                    Checkbox(checked = app.packageName in splitSettings.packages, onCheckedChange = null)
+                                },
+                                onClick = { onToggleSplitApp(app.packageName, app.packageName !in splitSettings.packages) },
+                                enabled = canEditSplit,
+                            )
+                        }
+                    }
+                }
+                Text("Выбрано: ${splitSettings.packages.size}", color = PanelColors.muted, fontSize = 13.sp)
+            }
+            Text("Сайты в обход VPN", color = PanelColors.text, fontWeight = FontWeight.SemiBold)
+            Text(
+                "Введите домен или URL. IP-адреса определяются при подключении; сайты с общим CDN-IP тоже могут идти в обход.",
+                color = PanelColors.muted,
+                fontSize = 13.sp,
+            )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                OutlinedTextField(
+                    value = siteDraft,
+                    onValueChange = { siteDraft = it },
+                    modifier = Modifier.weight(1f),
+                    singleLine = true,
+                    enabled = canEditSplit,
+                    label = { Text("Домен сайта") },
+                    placeholder = { Text("example.com") },
+                    colors = fieldColors(),
+                    keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.None),
+                )
+                TextButton(
+                    enabled = canEditSplit && siteDraft.isNotBlank(),
+                    onClick = {
+                        if (onAddBypassDomain(siteDraft)) siteDraft = ""
+                    },
+                ) {
+                    Text("Добавить", color = PanelColors.accent)
+                }
+            }
+            splitSettings.bypassDomains.sorted().forEach { domain ->
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(PanelColors.panel)
+                        .border(1.dp, PanelColors.line, RoundedCornerShape(8.dp))
+                        .padding(start = 12.dp, end = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(domain, color = PanelColors.text, modifier = Modifier.weight(1f))
+                    TextButton(enabled = canEditSplit, onClick = { onRemoveBypassDomain(domain) }) {
+                        Text("Удалить", color = PanelColors.danger)
+                    }
+                }
+            }
+            ui.error?.let { Text(it, color = PanelColors.danger, fontSize = 13.sp) }
+        }
+    }
+}
+
+@Composable
+private fun InstalledAppIcon(app: InstalledApp) {
+    AndroidView(
+        factory = { context -> ImageView(context).apply { contentDescription = app.label } },
+        update = { imageView -> imageView.setImageDrawable(app.icon) },
+        modifier = Modifier.size(32.dp),
+    )
+}
+
+@Composable
+internal fun TopBar(
+    title: String,
+    action: String,
+    onAction: () -> Unit,
+    splitTunnelEnabled: Boolean = false,
+) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -336,6 +577,16 @@ internal fun TopBar(title: String, action: String, onAction: () -> Unit) {
         )
         Spacer(Modifier.width(10.dp))
         Text(title, color = PanelColors.text, fontSize = 22.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+        if (splitTunnelEnabled) {
+            Text(
+                text = "⇄",
+                color = PanelColors.accent,
+                fontSize = 22.sp,
+                modifier = Modifier
+                    .padding(end = 8.dp)
+                    .semantics { contentDescription = "Раздельное туннелирование включено" },
+            )
+        }
         TextButton(onClick = onAction) {
             Text(action, color = PanelColors.accent)
         }

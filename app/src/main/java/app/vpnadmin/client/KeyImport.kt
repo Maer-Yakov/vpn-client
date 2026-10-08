@@ -18,6 +18,9 @@ object KeyImport {
     private val OBFUSCATION = listOf("Jc", "Jmin", "Jmax", "S1", "S2", "H1", "I1")
 
     fun parse(raw: String): ImportedKey {
+        if (raw.length > MAX_IMPORT_CHARS) {
+            throw IllegalArgumentException("Ключ слишком большой")
+        }
         val text = raw.trim().removePrefix("\uFEFF")
         if (text.isEmpty()) {
             throw IllegalArgumentException("Вставьте ключ")
@@ -151,4 +154,6 @@ object KeyImport {
         }
         return ""
     }
+
+    private const val MAX_IMPORT_CHARS = 512 * 1024
 }

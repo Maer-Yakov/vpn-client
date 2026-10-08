@@ -22,7 +22,16 @@ class MainActivity : ComponentActivity() {
     }
     private val openKey = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri == null) return@registerForActivityResult
-        contentResolver.openInputStream(uri)?.let(model::importStream)
+        try {
+            val stream = contentResolver.openInputStream(uri)
+            if (stream == null) {
+                model.report("Не удалось открыть файл")
+            } else {
+                model.importStream(stream)
+            }
+        } catch (_: Exception) {
+            model.report("Не удалось открыть файл")
+        }
     }
 
     override fun onResume() {
@@ -73,6 +82,15 @@ class MainActivity : ComponentActivity() {
                         version = BuildConfig.VERSION_NAME,
                         onBack = { model.show(Screen.Home) },
                         onSupport = ::openSupport,
+                        onSplitTunnel = { model.show(Screen.SplitTunnel) },
+                    )
+                    Screen.SplitTunnel -> SplitTunnelScreen(
+                        ui = ui,
+                        onBack = { model.show(Screen.Settings) },
+                        onSplitMode = model::setSplitMode,
+                        onToggleSplitApp = model::toggleSplitApp,
+                        onAddBypassDomain = model::addBypassDomain,
+                        onRemoveBypassDomain = model::removeBypassDomain,
                     )
                 }
             }

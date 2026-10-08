@@ -2,6 +2,10 @@ package app.vpnadmin.client
 
 import android.app.Application
 import android.content.Context
+import android.content.Intent
+import android.content.pm.PackageManager
+import android.graphics.drawable.Drawable
+import android.os.Build
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.Dispatchers
@@ -15,6 +19,7 @@ import org.amnezia.awg.backend.BackendException
 import org.amnezia.awg.backend.Tunnel
 import org.amnezia.awg.config.BadConfigException
 import java.io.InputStream
+import java.util.concurrent.CancellationException
 
 enum class Phase {
     Idle,
@@ -28,10 +33,19 @@ enum class Screen {
     Import,
     Scan,
     Settings,
+    SplitTunnel,
 }
+
+data class InstalledApp(
+    val packageName: String,
+    val label: String,
+    val icon: Drawable? = null,
+)
 
 data class UiState(
     val servers: List<StoredServer> = emptyList(),
+    val installedApps: List<InstalledApp> = emptyList(),
+    val installedAppsLoaded: Boolean = false,
     val activeId: String? = null,
     val screen: Screen = Screen.Home,
     val draft: String = "",
@@ -62,11 +76,16 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             UiState(
                 servers = library.servers,
                 activeId = library.activeId,
+                error = library.warning,
                 phase = if (running) Phase.Connected else Phase.Idle,
                 connectedSince = since,
             ),
         )
         ui = state
+        viewModelScope.launch {
+            val apps = withContext(Dispatchers.IO) { loadInstalledApps(app) }
+            state.value = state.value.copy(installedApps = apps, installedAppsLoaded = true)
+        }
         tunnels.listener = { tunnelState ->
             if (tunnelState == Tunnel.State.DOWN) {
                 if (state.value.phase != Phase.Connecting) rememberSince(null)
@@ -145,7 +164,14 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             try {
                 val key = withContext(Dispatchers.Default) { KeyImport.parse(raw) }
                 if (state.value.phase != Phase.Idle) {
-                    withContext(Dispatchers.IO) { runCatching { tunnels.disconnect() } }
+                    try {
+                        withContext(Dispatchers.IO) { tunnels.disconnect() }
+                    } catch (error: CancellationException) {
+                        throw error
+                    } catch (error: Exception) {
+                        state.value = state.value.copy(error = userMessage(error))
+                        return@launch
+                    }
                 }
                 val library = store.add(key)
                 rememberSince(null)
@@ -163,6 +189,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 )
             } catch (error: IllegalArgumentException) {
                 state.value = state.value.copy(screen = Screen.Import, draft = raw, error = error.message)
+            } catch (error: CancellationException) {
+                throw error
+            } catch (_: Exception) {
+                state.value = state.value.copy(screen = Screen.Import, draft = raw, error = "Не удалось сохранить профиль")
             }
         }
     }
@@ -171,7 +201,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch {
             try {
                 val text = withContext(Dispatchers.IO) {
-                    val bytes = stream.use { it.readNBytes(MAX_KEY_BYTES + 1) }
+                    val bytes = stream.use { it.readAtMost(MAX_KEY_BYTES) }
                     if (bytes.size > MAX_KEY_BYTES) {
                         throw IllegalArgumentException("Файл слишком большой")
                     }
@@ -180,6 +210,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 importText(text)
             } catch (error: IllegalArgumentException) {
                 state.value = state.value.copy(screen = Screen.Import, error = error.message)
+            } catch (error: CancellationException) {
+                throw error
+            } catch (_: Exception) {
+                state.value = state.value.copy(screen = Screen.Import, error = "Не удалось прочитать файл")
             }
         }
     }
@@ -187,7 +221,14 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun select(id: String) {
         viewModelScope.launch {
             if (state.value.phase != Phase.Idle && state.value.activeId != id) {
-                withContext(Dispatchers.IO) { runCatching { tunnels.disconnect() } }
+                try {
+                    withContext(Dispatchers.IO) { tunnels.disconnect() }
+                } catch (error: CancellationException) {
+                    throw error
+                } catch (error: Exception) {
+                    state.value = state.value.copy(error = userMessage(error))
+                    return@launch
+                }
                 rememberSince(null)
                 state.value = state.value.copy(
                     phase = Phase.Idle,
@@ -207,6 +248,63 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    fun setSplitMode(mode: AppRouteMode) {
+        val current = state.value
+        val active = current.active ?: return
+        if (current.phase != Phase.Idle) {
+            report("Отключите VPN, чтобы изменить раздельное туннелирование")
+            return
+        }
+        saveSplitSettings(active.id, active.splitTunnel.copy(mode = mode))
+    }
+
+    fun toggleSplitApp(packageName: String, selected: Boolean) {
+        if (!SplitTunnelSettings.isValidPackageName(packageName)) return
+        val current = state.value
+        val active = current.active ?: return
+        if (current.phase != Phase.Idle) {
+            report("Отключите VPN, чтобы изменить список приложений")
+            return
+        }
+        val packages = active.splitTunnel.packages.toMutableSet()
+        if (selected) packages.add(packageName) else packages.remove(packageName)
+        saveSplitSettings(active.id, active.splitTunnel.copy(packages = packages))
+    }
+
+    fun addBypassDomain(input: String): Boolean {
+        val current = state.value
+        val active = current.active ?: run {
+            report("Сначала выберите сервер")
+            return false
+        }
+        if (current.phase != Phase.Idle) {
+            report("Отключите VPN, чтобы изменить список сайтов")
+            return false
+        }
+        val domain = try {
+            SiteDomain.normalize(input)
+        } catch (error: IllegalArgumentException) {
+            report(error.message ?: "Некорректный домен сайта")
+            return false
+        }
+        if (domain in active.splitTunnel.bypassDomains) {
+            report("Этот сайт уже добавлен")
+            return false
+        }
+        saveSplitSettings(active.id, active.splitTunnel.copy(bypassDomains = active.splitTunnel.bypassDomains + domain))
+        return true
+    }
+
+    fun removeBypassDomain(domain: String) {
+        val current = state.value
+        val active = current.active ?: return
+        if (current.phase != Phase.Idle) {
+            report("Отключите VPN, чтобы изменить список сайтов")
+            return
+        }
+        saveSplitSettings(active.id, active.splitTunnel.copy(bypassDomains = active.splitTunnel.bypassDomains - domain))
+    }
+
     fun delete(id: String) {
         if (state.value.phase != Phase.Idle && state.value.activeId == id) {
             report("Сначала отключите VPN")
@@ -217,12 +315,32 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun connect() {
-        val profile = state.value.active ?: return
+        val current = state.value
+        val profile = current.active ?: return
         if (state.value.phase != Phase.Idle) return
+        if (profile.splitTunnel.mode != AppRouteMode.AllTraffic &&
+            profile.splitTunnel.packages.none(SplitTunnelSettings::isValidPackageName)
+        ) {
+            state.value = state.value.copy(
+                screen = Screen.Settings,
+                error = "Выберите хотя бы одно приложение для раздельного туннелирования",
+            )
+            return
+        }
+        if (current.installedAppsLoaded) {
+            val installedPackages = current.installedApps.mapTo(mutableSetOf(), InstalledApp::packageName)
+            if (profile.splitTunnel.packages.any { it !in installedPackages }) {
+                state.value = state.value.copy(
+                    screen = Screen.Settings,
+                    error = "В списке есть удалённые приложения. Снимите их выбор и повторите подключение",
+                )
+                return
+            }
+        }
         viewModelScope.launch {
             state.value = state.value.copy(phase = Phase.Connecting, error = null, screen = Screen.Home)
             try {
-                withContext(Dispatchers.IO) { tunnels.connect(profile.key.conf) }
+                withContext(Dispatchers.IO) { tunnels.connect(profile.key.conf, profile.splitTunnel) }
                 val started = System.currentTimeMillis()
                 rememberSince(started)
                 state.value = state.value.copy(phase = Phase.Connected, error = null, connectedSince = started, now = started)
@@ -238,8 +356,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch {
             try {
                 withContext(Dispatchers.IO) { tunnels.disconnect() }
+            } catch (error: CancellationException) {
+                throw error
             } catch (error: Exception) {
                 state.value = state.value.copy(error = userMessage(error))
+                return@launch
             }
             rememberSince(null)
             state.value = state.value.copy(
@@ -265,6 +386,31 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             .edit()
         if (value == null) editor.remove(KEY_SINCE) else editor.putLong(KEY_SINCE, value)
         editor.apply()
+    }
+
+    private fun saveSplitSettings(id: String, settings: SplitTunnelSettings) {
+        val library = store.setSplitTunnel(id, settings)
+        state.value = state.value.copy(servers = library.servers, activeId = library.activeId, error = null)
+    }
+
+    @Suppress("DEPRECATION")
+    private fun loadInstalledApps(application: Application): List<InstalledApp> {
+        val launcher = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER)
+        val activities = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            application.packageManager.queryIntentActivities(
+                launcher,
+                PackageManager.ResolveInfoFlags.of(0),
+            )
+        } else {
+            application.packageManager.queryIntentActivities(launcher, 0)
+        }
+        return activities.mapNotNull { resolveInfo ->
+            val packageName = resolveInfo.activityInfo?.packageName ?: return@mapNotNull null
+            val label = resolveInfo.loadLabel(application.packageManager)?.toString()
+                ?.takeIf { it.isNotBlank() } ?: packageName
+            val icon = runCatching { resolveInfo.loadIcon(application.packageManager) }.getOrNull()
+            InstalledApp(packageName, label, icon)
+        }.distinctBy(InstalledApp::packageName).sortedBy { it.label.lowercase() }
     }
 
     private fun formatHandshake(epochMillis: Long): String {
@@ -299,6 +445,27 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         const val PREFS = "vpn_session"
         const val KEY_SINCE = "connected_since"
     }
+}
+
+internal fun InputStream.readAtMost(maxBytes: Int): ByteArray {
+    require(maxBytes >= 0)
+    val output = java.io.ByteArrayOutputStream(minOf(maxBytes, 8 * 1024))
+    val buffer = ByteArray(8 * 1024)
+    var total = 0
+    while (total <= maxBytes) {
+        val count = read(buffer, 0, minOf(buffer.size, maxBytes + 1 - total))
+        if (count < 0) break
+        if (count == 0) {
+            val next = read()
+            if (next < 0) break
+            output.write(next)
+            total += 1
+        } else {
+            output.write(buffer, 0, count)
+            total += count
+        }
+    }
+    return output.toByteArray()
 }
 
 fun elapsedLabel(since: Long?, now: Long): String {

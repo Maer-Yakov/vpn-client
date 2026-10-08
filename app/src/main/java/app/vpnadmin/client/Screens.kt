@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -33,10 +34,6 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Checkbox
-import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.ExposedDropdownMenuBox
-import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
@@ -523,7 +520,6 @@ fun UpdateScreen(
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SplitTunnelScreen(
     ui: UiState,
@@ -555,6 +551,7 @@ fun SplitTunnelScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
+                .imePadding()
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = 20.dp, vertical = 12.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp),
@@ -605,11 +602,7 @@ fun SplitTunnelScreen(
                     }
                     Text(message, color = PanelColors.muted, fontSize = 13.sp)
                 }
-                ExposedDropdownMenuBox(
-                    expanded = expanded,
-                    onExpandedChange = { if (canEditSplit) expanded = !expanded },
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
+                Box(modifier = Modifier.fillMaxWidth()) {
                     OutlinedTextField(
                         value = if (splitSettings.packages.isEmpty()) {
                             "Выберите приложения"
@@ -620,41 +613,74 @@ fun SplitTunnelScreen(
                         readOnly = true,
                         enabled = canEditSplit,
                         label = { Text("Приложения") },
-                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
-                        modifier = Modifier.menuAnchor().fillMaxWidth(),
+                        trailingIcon = {
+                            Text(if (expanded) "▲" else "▼", color = PanelColors.muted)
+                        },
+                        modifier = Modifier.fillMaxWidth(),
                         colors = fieldColors(),
                     )
-                    ExposedDropdownMenu(
-                        expanded = expanded,
-                        onDismissRequest = { expanded = false },
-                        modifier = Modifier.heightIn(max = 520.dp),
+                    Box(
+                        modifier = Modifier
+                            .matchParentSize()
+                            .clickable(enabled = canEditSplit) { expanded = !expanded },
+                    )
+                }
+                if (expanded) {
+                    OutlinedTextField(
+                        value = appFilter,
+                        onValueChange = { appFilter = it },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true,
+                        enabled = canEditSplit,
+                        placeholder = { Text("Поиск приложения") },
+                        colors = fieldColors(),
+                        keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.None),
+                    )
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(max = 320.dp)
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(PanelColors.panel)
+                            .border(1.dp, PanelColors.line, RoundedCornerShape(10.dp))
+                            .verticalScroll(rememberScrollState()),
                     ) {
-                        OutlinedTextField(
-                            value = appFilter,
-                            onValueChange = { appFilter = it },
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 12.dp, vertical = 6.dp),
-                            singleLine = true,
-                            placeholder = { Text("Поиск приложения") },
-                            colors = fieldColors(),
-                            keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.None),
-                        )
-                        visibleApps.forEach { app ->
-                            DropdownMenuItem(
-                                text = {
-                                    Column {
-                                        Text(app.label, color = PanelColors.text)
-                                        Text(app.packageName, color = PanelColors.muted, fontSize = 11.sp)
-                                    }
-                                },
-                                leadingIcon = { InstalledAppIcon(app) },
-                                trailingIcon = {
-                                    Checkbox(checked = app.packageName in splitSettings.packages, onCheckedChange = null)
-                                },
-                                onClick = { onToggleSplitApp(app.packageName, app.packageName !in splitSettings.packages) },
-                                enabled = canEditSplit,
+                        if (visibleApps.isEmpty()) {
+                            Text(
+                                "Ничего не найдено",
+                                color = PanelColors.muted,
+                                fontSize = 13.sp,
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
                             )
+                        }
+                        visibleApps.forEach { app ->
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable(enabled = canEditSplit) {
+                                        onToggleSplitApp(
+                                            app.packageName,
+                                            app.packageName !in splitSettings.packages,
+                                        )
+                                    }
+                                    .padding(horizontal = 8.dp, vertical = 4.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                InstalledAppIcon(app)
+                                Column(
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .padding(horizontal = 12.dp),
+                                ) {
+                                    Text(app.label, color = PanelColors.text)
+                                    Text(app.packageName, color = PanelColors.muted, fontSize = 11.sp)
+                                }
+                                Checkbox(
+                                    checked = app.packageName in splitSettings.packages,
+                                    onCheckedChange = null,
+                                    enabled = canEditSplit,
+                                )
+                            }
                         }
                     }
                 }

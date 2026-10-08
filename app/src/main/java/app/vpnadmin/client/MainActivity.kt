@@ -17,9 +17,13 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 class MainActivity : ComponentActivity() {
     private val model: MainViewModel by viewModels()
+    private var pendingBackupText: String? = null
     private val vpnPermission = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
         if (it.resultCode == RESULT_OK) {
             model.connect()
@@ -35,6 +39,35 @@ class MainActivity : ComponentActivity() {
                 model.report("Не удалось открыть файл")
             } else {
                 model.importStream(stream)
+            }
+        } catch (_: Exception) {
+            model.report("Не удалось открыть файл")
+        }
+    }
+    private val createBackup = registerForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
+        val text = pendingBackupText
+        pendingBackupText = null
+        if (uri == null || text == null) return@registerForActivityResult
+        try {
+            contentResolver.openOutputStream(uri)?.use { output ->
+                output.write(text.toByteArray(Charsets.UTF_8))
+            } ?: run {
+                model.report("Не удалось сохранить файл")
+                return@registerForActivityResult
+            }
+            model.onBackupSaved()
+        } catch (_: Exception) {
+            model.report("Не удалось сохранить файл")
+        }
+    }
+    private val openBackup = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri == null) return@registerForActivityResult
+        try {
+            val stream = contentResolver.openInputStream(uri)
+            if (stream == null) {
+                model.report("Не удалось открыть файл")
+            } else {
+                model.importBackupStream(stream)
             }
         } catch (_: Exception) {
             model.report("Не удалось открыть файл")
@@ -99,6 +132,7 @@ class MainActivity : ComponentActivity() {
                             onSupport = ::openSupport,
                             onSplitTunnel = { model.show(Screen.SplitTunnel) },
                             onUpdate = { model.show(Screen.Update) },
+                            onBackup = { model.show(Screen.Backup) },
                         )
                         Screen.SplitTunnel -> SplitTunnelScreen(
                             ui = ui,
@@ -113,6 +147,14 @@ class MainActivity : ComponentActivity() {
                             version = BuildConfig.VERSION_NAME,
                             onBack = { model.show(Screen.Settings) },
                             onCheck = { model.checkForUpdate(manual = true) },
+                        )
+                        Screen.Backup -> BackupScreen(
+                            ui = ui,
+                            onBack = { model.show(Screen.Settings) },
+                            onSave = ::saveBackup,
+                            onLoad = {
+                                openBackup.launch(arrayOf("application/json", "text/plain", "*/*"))
+                            },
                         )
                     }
                     if (showStartup) {
@@ -143,6 +185,13 @@ class MainActivity : ComponentActivity() {
         } else {
             startActivity(intent)
         }
+    }
+
+    private fun saveBackup() {
+        val text = model.exportBackupText() ?: return
+        pendingBackupText = text
+        val stamp = SimpleDateFormat("yyyyMMdd-HHmm", Locale.US).format(Date())
+        createBackup.launch("mvpn-backup-$stamp.json")
     }
 
     private fun openSupport() {

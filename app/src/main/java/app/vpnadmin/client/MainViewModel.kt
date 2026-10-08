@@ -35,6 +35,7 @@ enum class Screen {
     Settings,
     SplitTunnel,
     Update,
+    Backup,
 }
 
 enum class UpdatePhase {
@@ -70,6 +71,7 @@ data class UiState(
     val lastUpdateCheckAt: Long = 0L,
     val appUpdatedAt: Long = 0L,
     val pendingInstallApk: String? = null,
+    val notice: String? = null,
 ) {
     val active: StoredServer?
         get() = servers.firstOrNull { it.id == activeId }
@@ -143,11 +145,16 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun show(screen: Screen) {
-        state.value = state.value.copy(screen = screen, error = null, draft = if (screen == Screen.Import) "" else state.value.draft)
+        state.value = state.value.copy(
+            screen = screen,
+            error = null,
+            notice = null,
+            draft = if (screen == Screen.Import) "" else state.value.draft,
+        )
     }
 
     fun updateDraft(value: String) {
-        state.value = state.value.copy(draft = value, error = null)
+        state.value = state.value.copy(draft = value, error = null, notice = null)
     }
 
     fun refreshConnection() {
@@ -174,7 +181,85 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun report(message: String) {
-        state.value = state.value.copy(error = message)
+        state.value = state.value.copy(error = message, notice = null)
+    }
+
+    fun exportBackupText(): String? {
+        if (state.value.servers.isEmpty()) {
+            report("Нет серверов для сохранения")
+            return null
+        }
+        return try {
+            store.exportBackup()
+        } catch (error: Exception) {
+            report(error.message?.takeIf { it.isNotBlank() } ?: "Не удалось сохранить конфигурацию")
+            null
+        }
+    }
+
+    fun onBackupSaved() {
+        state.value = state.value.copy(
+            error = null,
+            notice = "Конфигурация сохранена на телефон",
+        )
+    }
+
+    fun importBackupText(raw: String) {
+        viewModelScope.launch {
+            if (state.value.phase != Phase.Idle) {
+                try {
+                    withContext(Dispatchers.IO) { tunnels.disconnect() }
+                } catch (error: CancellationException) {
+                    throw error
+                } catch (error: Exception) {
+                    state.value = state.value.copy(error = userMessage(error), notice = null)
+                    return@launch
+                }
+                rememberSince(null)
+            }
+            try {
+                val library = withContext(Dispatchers.Default) { store.importBackup(raw) }
+                state.value = state.value.copy(
+                    servers = library.servers,
+                    activeId = library.activeId,
+                    phase = Phase.Idle,
+                    error = null,
+                    notice = "Конфигурация загружена (${library.servers.size})",
+                    rxBytes = 0,
+                    txBytes = 0,
+                    handshake = "—",
+                    connectedSince = null,
+                    screen = Screen.Backup,
+                )
+            } catch (error: IllegalArgumentException) {
+                state.value = state.value.copy(error = error.message, notice = null)
+            } catch (error: CancellationException) {
+                throw error
+            } catch (_: Exception) {
+                state.value = state.value.copy(error = "Не удалось загрузить конфигурацию", notice = null)
+            }
+        }
+    }
+
+    fun importBackupStream(stream: InputStream) {
+        viewModelScope.launch {
+            try {
+                val text = withContext(Dispatchers.IO) {
+                    val bytes = stream.use { it.readAtMost(MAX_BACKUP_BYTES) }
+                    if (bytes.size > MAX_BACKUP_BYTES) {
+                        throw IllegalArgumentException("Файл слишком большой")
+                    }
+                    bytes.toString(Charsets.UTF_8)
+                }
+                importBackupText(text)
+            } catch (error: IllegalArgumentException) {
+                state.value = state.value.copy(error = error.message, notice = null)
+            } catch (error: CancellationException) {
+                throw error
+            } catch (_: Exception) {
+                state.value = state.value.copy(error = "Не удалось прочитать файл", notice = null)
+            }
+        }
     }
 
     fun importText(raw: String) {
@@ -562,6 +647,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     private companion object {
         const val MAX_KEY_BYTES = 256 * 1024
+        const val MAX_BACKUP_BYTES = 2 * 1024 * 1024
         const val PREFS = "vpn_session"
         const val KEY_SINCE = "connected_since"
     }

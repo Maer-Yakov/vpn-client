@@ -89,6 +89,47 @@ class ProfileStoreTest {
         }
     }
 
+    @Test
+    fun backupRoundTripKeepsServersAndSplitSettings() {
+        val directory = Files.createTempDirectory("profile-store-backup").toFile()
+        try {
+            val store = ProfileStore(directory)
+            val profile = store.add(sampleKey()).servers.single()
+            val expected = SplitTunnelSettings(
+                mode = AppRouteMode.SelectedThroughVpn,
+                packages = setOf("com.example.app"),
+                bypassDomains = setOf("example.com"),
+            )
+            store.setSplitTunnel(profile.id, expected)
+
+            val backup = store.exportBackup()
+            directory.listFiles()?.forEach { it.delete() }
+            val restored = store.importBackup(backup)
+
+            assertEquals(1, restored.servers.size)
+            assertEquals(expected, restored.servers.single().splitTunnel)
+            assertEquals(profile.key.conf, restored.servers.single().key.conf)
+            assertEquals(profile.id, restored.activeId)
+        } finally {
+            directory.deleteRecursively()
+        }
+    }
+
+    @Test
+    fun backupRejectsUnknownFormat() {
+        val directory = Files.createTempDirectory("profile-store-bad-backup").toFile()
+        try {
+            val store = ProfileStore(directory)
+            store.add(sampleKey())
+            val result = runCatching {
+                store.importBackup("""{"format":"other","version":1,"servers":[]}""")
+            }
+            assertTrue(result.isFailure)
+        } finally {
+            directory.deleteRecursively()
+        }
+    }
+
     private fun sampleKey() = ImportedKey(
         title = "Office",
         conf = "[Interface]\nPrivateKey = private\n[Peer]\nPublicKey = public\n",

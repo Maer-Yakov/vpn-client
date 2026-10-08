@@ -337,6 +337,7 @@ fun SettingsScreen(
     onSupport: () -> Unit,
     onSplitTunnel: () -> Unit,
     onUpdate: () -> Unit,
+    onBackup: () -> Unit,
 ) {
     val key = ui.active?.key
     Scaffold(containerColor = PanelColors.bg) { padding ->
@@ -382,8 +383,61 @@ fun SettingsScreen(
                     Text("›", color = PanelColors.muted, fontSize = 22.sp)
                 }
             }
+            PanelCard(onClick = onBackup) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("Конфигурация", color = PanelColors.text, fontWeight = FontWeight.SemiBold)
+                        Text("Сохранение и загрузка серверов", color = PanelColors.muted, fontSize = 13.sp)
+                    }
+                    Text("›", color = PanelColors.muted, fontSize = 22.sp)
+                }
+            }
+            ui.notice?.let { Text(it, color = PanelColors.accent, fontSize = 13.sp) }
             ui.error?.let { Text(it, color = PanelColors.danger, fontSize = 13.sp) }
             SupportLink(onSupport)
+        }
+    }
+}
+
+@Composable
+fun BackupScreen(
+    ui: UiState,
+    onBack: () -> Unit,
+    onSave: () -> Unit,
+    onLoad: () -> Unit,
+) {
+    Scaffold(containerColor = PanelColors.bg) { padding ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding)
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 20.dp, vertical = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            TopBar(title = "Конфигурация", action = "Назад", onAction = onBack)
+            Text(
+                "Сохраняются серверы, режимы раздельного туннелирования, списки приложений и сайтов. В файле есть ключи VPN — храните его только у себя.",
+                color = PanelColors.muted,
+                fontSize = 13.sp,
+            )
+            SettingRow("Серверов сейчас", ui.servers.size.toString())
+            Button(
+                onClick = onSave,
+                enabled = ui.servers.isNotEmpty(),
+                modifier = Modifier.fillMaxWidth(),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = PanelColors.accent,
+                    contentColor = PanelColors.accentInk,
+                    disabledContainerColor = PanelColors.line,
+                    disabledContentColor = PanelColors.muted,
+                ),
+            ) {
+                Text("Сохранить на телефон")
+            }
+            GhostButton("Загрузить с телефона", onLoad)
+            ui.notice?.let { Text(it, color = PanelColors.accent, fontSize = 13.sp) }
+            ui.error?.let { Text(it, color = PanelColors.danger, fontSize = 13.sp) }
         }
     }
 }

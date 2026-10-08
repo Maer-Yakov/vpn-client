@@ -37,6 +37,7 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.RadioButton
@@ -93,9 +94,10 @@ fun HomeScreen(
                 .padding(horizontal = 20.dp, vertical = 12.dp),
         ) {
             TopBar(
-                title = "VPN",
+                title = "Mvpn",
                 action = "Настройки",
                 onAction = onSettings,
+                iconAction = true,
                 splitTunnelEnabled = splitEnabled,
             )
             Column(
@@ -560,6 +562,7 @@ internal fun TopBar(
     title: String,
     action: String,
     onAction: () -> Unit,
+    iconAction: Boolean = false,
     splitTunnelEnabled: Boolean = false,
 ) {
     Row(
@@ -587,8 +590,21 @@ internal fun TopBar(
                     .semantics { contentDescription = "Раздельное туннелирование включено" },
             )
         }
-        TextButton(onClick = onAction) {
-            Text(action, color = PanelColors.accent)
+        if (iconAction) {
+            IconButton(
+                onClick = onAction,
+                modifier = Modifier.semantics { contentDescription = action },
+            ) {
+                Image(
+                    painter = painterResource(R.drawable.ic_settings),
+                    contentDescription = null,
+                    modifier = Modifier.size(24.dp),
+                )
+            }
+        } else {
+            TextButton(onClick = onAction) {
+                Text(action, color = PanelColors.accent)
+            }
         }
     }
 }

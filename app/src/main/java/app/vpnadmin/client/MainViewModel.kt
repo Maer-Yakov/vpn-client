@@ -34,6 +34,13 @@ enum class Screen {
     Scan,
     Settings,
     SplitTunnel,
+    Update,
+}
+
+enum class UpdatePhase {
+    Idle,
+    Checking,
+    Downloading,
 }
 
 data class InstalledApp(
@@ -56,6 +63,13 @@ data class UiState(
     val handshake: String = "—",
     val connectedSince: Long? = null,
     val now: Long = System.currentTimeMillis(),
+    val updatePhase: UpdatePhase = UpdatePhase.Idle,
+    val updateMessage: String? = null,
+    val updateAvailable: RemoteRelease? = null,
+    val currentVersionReleasedAt: Long = 0L,
+    val lastUpdateCheckAt: Long = 0L,
+    val appUpdatedAt: Long = 0L,
+    val pendingInstallApk: String? = null,
 ) {
     val active: StoredServer?
         get() = servers.firstOrNull { it.id == activeId }
@@ -79,6 +93,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 error = library.warning,
                 phase = if (running) Phase.Connected else Phase.Idle,
                 connectedSince = since,
+                currentVersionReleasedAt = AppUpdater.currentVersionReleasedAt(app),
+                lastUpdateCheckAt = AppUpdater.lastCheckAt(app),
+                appUpdatedAt = AppUpdater.installedAt(app),
             ),
         )
         ui = state
@@ -86,6 +103,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             val apps = withContext(Dispatchers.IO) { loadInstalledApps(app) }
             state.value = state.value.copy(installedApps = apps, installedAppsLoaded = true)
         }
+        checkForUpdate(manual = false)
         tunnels.listener = { tunnelState ->
             if (tunnelState == Tunnel.State.DOWN) {
                 if (state.value.phase != Phase.Connecting) rememberSince(null)
@@ -372,6 +390,108 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             )
         }
     }
+
+    fun checkForUpdate(manual: Boolean) {
+        if (state.value.updatePhase != UpdatePhase.Idle) return
+        viewModelScope.launch {
+            state.value = state.value.copy(
+                updatePhase = UpdatePhase.Checking,
+                updateMessage = if (manual) "Проверка обновлений…" else state.value.updateMessage,
+                error = if (manual && state.value.screen == Screen.Update) null else state.value.error,
+            )
+            val result = try {
+                withContext(Dispatchers.IO) {
+                    AppUpdater.checkLatest(getApplication())
+                }
+            } catch (error: CancellationException) {
+                throw error
+            } catch (_: Exception) {
+                UpdateCheckResult(null, false, "Не удалось проверить обновления")
+            }
+            val releaseAt = when {
+                result.release != null && !result.updateAvailable -> result.release.publishedAtMillis
+                else -> state.value.currentVersionReleasedAt
+            }
+            if (releaseAt > 0L) {
+                AppUpdater.rememberCurrentReleaseAt(getApplication(), releaseAt)
+            }
+            state.value = state.value.copy(
+                updatePhase = UpdatePhase.Idle,
+                updateAvailable = result.release.takeIf { result.updateAvailable },
+                updateMessage = result.message,
+                currentVersionReleasedAt = if (releaseAt > 0L) releaseAt else state.value.currentVersionReleasedAt,
+                lastUpdateCheckAt = AppUpdater.lastCheckAt(getApplication()),
+            )
+            if (manual && result.updateAvailable && result.release != null) {
+                downloadAndInstallUpdate()
+            }
+        }
+    }
+
+    fun downloadAndInstallUpdate() {
+        val release = state.value.updateAvailable ?: return
+        if (state.value.updatePhase != UpdatePhase.Idle) return
+        viewModelScope.launch {
+            state.value = state.value.copy(
+                updatePhase = UpdatePhase.Downloading,
+                updateMessage = "Скачивание ${release.versionName}…",
+                error = null,
+            )
+            try {
+                val apk = withContext(Dispatchers.IO) {
+                    AppUpdater.downloadApk(getApplication(), release)
+                }
+                state.value = state.value.copy(
+                    updatePhase = UpdatePhase.Idle,
+                    updateMessage = "Установка ${release.versionName}…",
+                    pendingInstallApk = apk.absolutePath,
+                )
+                requestInstall(apk.absolutePath)
+            } catch (error: CancellationException) {
+                throw error
+            } catch (error: Exception) {
+                state.value = state.value.copy(
+                    updatePhase = UpdatePhase.Idle,
+                    updateMessage = error.message?.takeIf { it.isNotBlank() } ?: "Не удалось скачать обновление",
+                    pendingInstallApk = null,
+                )
+            }
+        }
+    }
+
+    fun resumePendingInstall() {
+        val path = state.value.pendingInstallApk ?: return
+        pendingInstallPath = path
+    }
+
+    fun consumeInstallRequest(): Intent? {
+        val path = pendingInstallPath ?: return null
+        pendingInstallPath = null
+        val file = java.io.File(path)
+        if (!file.isFile) {
+            state.value = state.value.copy(
+                updateMessage = "Файл обновления не найден",
+                pendingInstallApk = null,
+            )
+            return null
+        }
+        val app = getApplication<Application>()
+        if (!AppUpdater.canInstallPackages(app)) {
+            pendingInstallPath = path
+            return AppUpdater.installPermissionSettingsIntent(app)
+        }
+        return AppUpdater.installIntent(app, file)
+    }
+
+    private var pendingInstallPath: String? = null
+
+    private fun requestInstall(path: String) {
+        pendingInstallPath = path
+        state.value = state.value.copy(pendingInstallApk = path)
+        installRequester?.invoke()
+    }
+
+    var installRequester: (() -> Unit)? = null
 
     private fun storedSince(): Long {
         val saved = getApplication<Application>()

@@ -14,6 +14,15 @@ if (hasReleaseKeystore) {
     keystoreProperties.load(FileInputStream(keystorePropertiesFile))
 }
 
+val localProperties = Properties()
+val localPropertiesFile = rootProject.file("local.properties")
+if (localPropertiesFile.exists()) {
+    localProperties.load(FileInputStream(localPropertiesFile))
+}
+val githubUpdateToken = (localProperties.getProperty("github.update.token") ?: "")
+    .replace("\\", "\\\\")
+    .replace("\"", "\\\"")
+
 android {
     namespace = "app.vpnadmin.client"
     compileSdk = 36
@@ -22,8 +31,10 @@ android {
         applicationId = "app.vpnadmin.client"
         minSdk = 26
         targetSdk = 36
-        versionCode = 3
-        versionName = "1.3.0"
+        versionCode = 4
+        versionName = "1.4.0"
+        buildConfigField("String", "GITHUB_REPO", "\"Maer-Yakov/vpn-client\"")
+        buildConfigField("String", "GITHUB_UPDATE_TOKEN", "\"$githubUpdateToken\"")
     }
 
     signingConfigs {
@@ -74,6 +85,7 @@ dependencies {
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.material3:material3")
     implementation("androidx.activity:activity-compose:1.10.0")
+    implementation("androidx.core:core-ktx:1.15.0")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.7")
     implementation("androidx.lifecycle:lifecycle-runtime-compose:2.8.7")
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.7")

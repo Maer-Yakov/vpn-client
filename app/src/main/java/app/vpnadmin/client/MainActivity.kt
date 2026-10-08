@@ -3,6 +3,7 @@ package app.vpnadmin.client
 import android.content.Intent
 import android.net.VpnService
 import android.os.Bundle
+import android.provider.Settings
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -39,6 +40,10 @@ class MainActivity : ComponentActivity() {
             model.report("Не удалось открыть файл")
         }
     }
+    private val installPermission = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
+        model.resumePendingInstall()
+        launchPendingInstall()
+    }
 
     override fun onResume() {
         super.onResume()
@@ -48,6 +53,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        model.installRequester = { launchPendingInstall() }
         consumeIntent(intent)
         setContent {
             VpnTheme {
@@ -63,6 +69,7 @@ class MainActivity : ComponentActivity() {
                             onSettings = { model.show(Screen.Settings) },
                             onAdd = { model.show(Screen.Import) },
                             onSupport = ::openSupport,
+                            onOpenUpdate = { model.show(Screen.Update) },
                         )
                         Screen.Servers -> ServersScreen(
                             ui = ui,
@@ -91,6 +98,7 @@ class MainActivity : ComponentActivity() {
                             onBack = { model.show(Screen.Home) },
                             onSupport = ::openSupport,
                             onSplitTunnel = { model.show(Screen.SplitTunnel) },
+                            onUpdate = { model.show(Screen.Update) },
                         )
                         Screen.SplitTunnel -> SplitTunnelScreen(
                             ui = ui,
@@ -99,6 +107,12 @@ class MainActivity : ComponentActivity() {
                             onToggleSplitApp = model::toggleSplitApp,
                             onAddBypassDomain = model::addBypassDomain,
                             onRemoveBypassDomain = model::removeBypassDomain,
+                        )
+                        Screen.Update -> UpdateScreen(
+                            ui = ui,
+                            version = BuildConfig.VERSION_NAME,
+                            onBack = { model.show(Screen.Settings) },
+                            onCheck = { model.checkForUpdate(manual = true) },
                         )
                     }
                     if (showStartup) {
@@ -109,10 +123,26 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    override fun onDestroy() {
+        if (model.installRequester != null) {
+            model.installRequester = null
+        }
+        super.onDestroy()
+    }
+
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
         consumeIntent(intent)
+    }
+
+    private fun launchPendingInstall() {
+        val intent = model.consumeInstallRequest() ?: return
+        if (intent.action == Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES) {
+            installPermission.launch(intent)
+        } else {
+            startActivity(intent)
+        }
     }
 
     private fun openSupport() {

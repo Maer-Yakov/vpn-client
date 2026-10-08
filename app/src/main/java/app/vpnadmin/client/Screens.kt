@@ -79,6 +79,7 @@ fun HomeScreen(
     onSettings: () -> Unit,
     onAdd: () -> Unit,
     onSupport: () -> Unit,
+    onOpenUpdate: () -> Unit = {},
 ) {
     val active = ui.active
     val connected = ui.phase == Phase.Connected
@@ -179,6 +180,12 @@ fun HomeScreen(
                         }
                         Text("›", color = PanelColors.muted, fontSize = 22.sp)
                     }
+                }
+            }
+            ui.updateAvailable?.let { release ->
+                PanelCard(onClick = onOpenUpdate) {
+                    Text("Доступно обновление ${release.versionName}", color = PanelColors.accent, fontWeight = FontWeight.SemiBold)
+                    Text("Нажмите, чтобы открыть раздел «Обновление»", color = PanelColors.muted, fontSize = 13.sp)
                 }
             }
             ui.error?.let {
@@ -329,6 +336,7 @@ fun SettingsScreen(
     onBack: () -> Unit,
     onSupport: () -> Unit,
     onSplitTunnel: () -> Unit,
+    onUpdate: () -> Unit,
 ) {
     val key = ui.active?.key
     Scaffold(containerColor = PanelColors.bg) { padding ->
@@ -357,8 +365,87 @@ fun SettingsScreen(
                     Text("›", color = PanelColors.muted, fontSize = 22.sp)
                 }
             }
+            PanelCard(onClick = onUpdate) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("Обновление", color = PanelColors.text, fontWeight = FontWeight.SemiBold)
+                        Text(
+                            if (ui.updateAvailable != null) {
+                                "Доступна ${ui.updateAvailable.versionName}"
+                            } else {
+                                "Проверка и установка новой версии"
+                            },
+                            color = if (ui.updateAvailable != null) PanelColors.accent else PanelColors.muted,
+                            fontSize = 13.sp,
+                        )
+                    }
+                    Text("›", color = PanelColors.muted, fontSize = 22.sp)
+                }
+            }
             ui.error?.let { Text(it, color = PanelColors.danger, fontSize = 13.sp) }
             SupportLink(onSupport)
+        }
+    }
+}
+
+@Composable
+fun UpdateScreen(
+    ui: UiState,
+    version: String,
+    onBack: () -> Unit,
+    onCheck: () -> Unit,
+) {
+    val busy = ui.updatePhase != UpdatePhase.Idle
+    val buttonLabel = when (ui.updatePhase) {
+        UpdatePhase.Checking -> "Проверка…"
+        UpdatePhase.Downloading -> "Скачивание…"
+        UpdatePhase.Idle -> "Проверить обновление"
+    }
+    Scaffold(containerColor = PanelColors.bg) { padding ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding)
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 20.dp, vertical = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            TopBar(title = "Обновление", action = "Назад", onAction = onBack)
+            SettingRow("Текущая версия", version)
+            SettingRow(
+                "Дата текущей версии",
+                AppUpdater.formatDate(
+                    ui.currentVersionReleasedAt.takeIf { it > 0L } ?: ui.appUpdatedAt,
+                ),
+            )
+            SettingRow("Дата последнего обновления", AppUpdater.formatDate(ui.appUpdatedAt))
+            SettingRow("Последняя проверка", AppUpdater.formatDate(ui.lastUpdateCheckAt))
+            ui.updateAvailable?.let { release ->
+                SettingRow(
+                    "Доступна версия",
+                    "${release.versionName} · ${AppUpdater.formatDate(release.publishedAtMillis)}",
+                )
+            }
+            ui.updateMessage?.let { message ->
+                Text(
+                    message,
+                    color = if (ui.updateAvailable != null) PanelColors.accent else PanelColors.muted,
+                    fontSize = 13.sp,
+                )
+            }
+            Button(
+                onClick = onCheck,
+                enabled = !busy,
+                modifier = Modifier.fillMaxWidth(),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = PanelColors.accent,
+                    contentColor = PanelColors.accentInk,
+                    disabledContainerColor = PanelColors.line,
+                    disabledContentColor = PanelColors.muted,
+                ),
+            ) {
+                Text(buttonLabel)
+            }
         }
     }
 }

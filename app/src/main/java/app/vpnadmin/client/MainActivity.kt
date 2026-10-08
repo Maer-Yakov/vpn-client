@@ -87,6 +87,9 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         model.installRequester = { launchPendingInstall() }
+        if (intent.getBooleanExtra(EXTRA_TEST_SUBSCRIPTION_WARNING, false)) {
+            model.setActiveExpiresInDays(1)
+        }
         consumeIntent(intent)
         setContent {
             VpnTheme {
@@ -223,5 +226,6 @@ class MainActivity : ComponentActivity() {
 
     private companion object {
         const val EXTRA_CONSUMED = "app.vpnadmin.client.consumed"
+        const val EXTRA_TEST_SUBSCRIPTION_WARNING = "test_subscription_warning"
     }
 }

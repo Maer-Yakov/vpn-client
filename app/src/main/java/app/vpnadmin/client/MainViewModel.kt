@@ -106,6 +106,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             state.value = state.value.copy(installedApps = apps, installedAppsLoaded = true)
         }
         checkForUpdate(manual = false)
+        refreshPeerExpiry()
         tunnels.listener = { tunnelState ->
             if (tunnelState == Tunnel.State.DOWN) {
                 if (state.value.phase != Phase.Connecting) rememberSince(null)
@@ -168,6 +169,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 now = System.currentTimeMillis(),
                 error = null,
             )
+            refreshPeerExpiry()
         } else if (!running && state.value.phase == Phase.Connected) {
             rememberSince(null)
             state.value = state.value.copy(
@@ -177,11 +179,41 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 handshake = "—",
                 connectedSince = null,
             )
+        } else if (running && state.value.phase == Phase.Connected) {
+            refreshPeerExpiry()
         }
     }
 
     fun report(message: String) {
         state.value = state.value.copy(error = message, notice = null)
+    }
+
+    fun setActiveExpiresInDays(days: Int) {
+        val active = state.value.active ?: return
+        val millis = System.currentTimeMillis() + days.coerceAtLeast(0) * 86_400_000L
+        val library = store.setExpiresAt(active.id, millis)
+        state.value = state.value.copy(
+            servers = library.servers,
+            activeId = library.activeId,
+            notice = "Тестовый срок подписки: ${SubscriptionExpiry.formatDate(millis)}",
+            error = null,
+        )
+    }
+
+    fun refreshPeerExpiry() {
+        val active = state.value.active ?: return
+        viewModelScope.launch {
+            val remote = withContext(Dispatchers.IO) {
+                runCatching { PeerExpirySync.fetch(active.key) }.getOrNull()
+            } ?: return@launch
+            if (!remote.found) return@launch
+            if (remote.expiresAtMillis == active.key.expiresAtMillis) return@launch
+            val library = store.setExpiresAt(active.id, remote.expiresAtMillis)
+            state.value = state.value.copy(
+                servers = library.servers,
+                activeId = library.activeId,
+            )
+        }
     }
 
     fun exportBackupText(): String? {
@@ -447,6 +479,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 val started = System.currentTimeMillis()
                 rememberSince(started)
                 state.value = state.value.copy(phase = Phase.Connected, error = null, connectedSince = started, now = started)
+                refreshPeerExpiry()
             } catch (error: Exception) {
                 rememberSince(null)
                 state.value = state.value.copy(phase = Phase.Idle, error = userMessage(error), connectedSince = null)

@@ -36,6 +36,7 @@ class KeyImportTest {
         """.trimIndent()
         val json = JSONObject()
             .put("description", "Дом (NL)")
+            .put("expiresAt", "2026-12-31T15:30:00Z")
             .put(
                 "containers",
                 org.json.JSONArray().put(
@@ -54,6 +55,26 @@ class KeyImportTest {
         assertEquals("1.1.1.1", imported.dns)
         assertTrue(imported.conf.contains("Jc = 4"))
         assertTrue(imported.conf.contains("PrivateKey = AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="))
+        assertEquals(SubscriptionExpiry.parseIsoToMillis("2026-12-31T15:30:00Z"), imported.expiresAtMillis)
+    }
+
+    @Test
+    fun readsExpiresAtFromConfComment() {
+        val imported = KeyImport.parse(
+            """
+            # Офис
+            # ExpiresAt = 2026-10-10T12:00:00Z
+            [Interface]
+            PrivateKey = AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+            Address = 10.8.1.3/32
+
+            [Peer]
+            PublicKey = BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB=
+            Endpoint = 203.0.113.10:51820
+            AllowedIPs = 0.0.0.0/0
+            """.trimIndent(),
+        )
+        assertEquals(SubscriptionExpiry.parseIsoToMillis("2026-10-10T12:00:00Z"), imported.expiresAtMillis)
     }
 
     @Test

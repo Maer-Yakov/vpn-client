@@ -96,6 +96,20 @@ class ProfileStore internal constructor(private val filesDir: File) {
         return write(parsed.servers, parsed.activeId)
     }
 
+    fun setExpiresAt(id: String, expiresAtMillis: Long?): ServerLibrary {
+        val current = load()
+        requireWritable(current)
+        if (current.servers.none { it.id == id }) return current
+        val servers = current.servers.map { server ->
+            if (server.id == id) {
+                server.copy(key = server.key.copy(expiresAtMillis = expiresAtMillis?.takeIf { it > 0L }))
+            } else {
+                server
+            }
+        }
+        return write(servers, current.activeId)
+    }
+
     private fun migrateLegacy() {
         if (file.isFile || !legacyConf.isFile) return
         val parsed = try {
@@ -173,6 +187,14 @@ class ProfileStore internal constructor(private val filesDir: File) {
                         .put("dns", server.key.dns)
                         .put("protocol", server.key.protocol)
                         .put("conf", server.key.conf)
+                        .put(
+                            "expiresAt",
+                            server.key.expiresAtMillis?.takeIf { it > 0L } ?: JSONObject.NULL,
+                        )
+                        .put(
+                            "panelUrl",
+                            server.key.panelUrl?.takeIf { it.isNotBlank() } ?: JSONObject.NULL,
+                        )
                         .put("splitMode", server.splitTunnel.mode.name)
                         .put("splitPackages", JSONArray(server.splitTunnel.packages.sorted()))
                         .put("bypassDomains", JSONArray(server.splitTunnel.bypassDomains.sorted())),
@@ -188,6 +210,11 @@ class ProfileStore internal constructor(private val filesDir: File) {
                     val item = array.optJSONObject(index) ?: continue
                     val conf = item.optString("conf")
                     if (conf.isBlank()) continue
+                    val storedExpiry = when {
+                        item.isNull("expiresAt") -> null
+                        else -> SubscriptionExpiry.parseIsoToMillis(item.optString("expiresAt"))
+                            ?: item.optLong("expiresAt", 0L).takeIf { it > 0L }
+                    }
                     add(
                         StoredServer(
                             id = item.optString("id").ifBlank { UUID.randomUUID().toString() },
@@ -198,6 +225,15 @@ class ProfileStore internal constructor(private val filesDir: File) {
                                 address = item.optString("address"),
                                 dns = item.optString("dns").ifBlank { "—" },
                                 protocol = item.optString("protocol").ifBlank { "AmneziaWG" },
+                                expiresAtMillis = storedExpiry
+                                    ?: SubscriptionExpiry.parseIsoToMillis(
+                                        conf.lineSequence()
+                                            .map { it.trim().removePrefix("#").trim() }
+                                            .firstOrNull { it.startsWith("ExpiresAt", ignoreCase = true) }
+                                            ?.substringAfter("=", "")
+                                            ?.trim(),
+                                    ),
+                                panelUrl = item.optString("panelUrl").trim().trimEnd('/').ifBlank { null },
                             ),
                             splitTunnel = readSplitTunnelSettings(item),
                         ),

@@ -11,6 +11,8 @@ data class ImportedKey(
     val address: String,
     val dns: String,
     val protocol: String,
+    val expiresAtMillis: Long? = null,
+    val panelUrl: String? = null,
 )
 
 object KeyImport {
@@ -27,7 +29,7 @@ object KeyImport {
         }
         val uri = vpnUri.find(text)?.value
         val decoded = if (uri != null) decodeVpnUri(uri) else null
-        val conf = (decoded?.second ?: text).trim().replace("\r\n", "\n")
+        val conf = (decoded?.conf ?: text).trim().replace("\r\n", "\n")
         if (!conf.contains("[Interface]", ignoreCase = true) || !conf.contains("[Peer]", ignoreCase = true)) {
             throw IllegalArgumentException("Ключ не распознан")
         }
@@ -35,8 +37,9 @@ object KeyImport {
         requireField(conf, "Address")
         requireField(conf, "PublicKey")
         requireField(conf, "Endpoint")
-        val title = decoded?.first?.takeIf { it.isNotBlank() } ?: titleFromConf(conf)
+        val title = decoded?.title?.takeIf { it.isNotBlank() } ?: titleFromConf(conf)
         val stored = if (conf.endsWith("\n")) conf else "$conf\n"
+        val expiresAt = decoded?.expiresAtMillis ?: expiresAtFromConf(stored)
         return ImportedKey(
             title = title,
             conf = stored,
@@ -44,10 +47,19 @@ object KeyImport {
             address = field(stored, "Address").substringBefore("/").substringBefore(",").trim(),
             dns = field(stored, "DNS").ifBlank { "—" },
             protocol = if (OBFUSCATION.any { field(stored, it).isNotBlank() }) "AmneziaWG" else "WireGuard",
+            expiresAtMillis = expiresAt,
+            panelUrl = decoded?.panelUrl,
         )
     }
 
-    private fun decodeVpnUri(uri: String): Pair<String, String> {
+    private data class DecodedVpn(
+        val title: String,
+        val conf: String,
+        val expiresAtMillis: Long?,
+        val panelUrl: String?,
+    )
+
+    private fun decodeVpnUri(uri: String): DecodedVpn {
         var payload = uri.removePrefix("vpn://")
         val remainder = payload.length % 4
         if (remainder != 0) {
@@ -92,13 +104,20 @@ object KeyImport {
         }
     }
 
-    private fun extractConf(json: String): Pair<String, String> {
+    private fun extractConf(json: String): DecodedVpn {
         val root = try {
             JSONObject(json)
         } catch (_: Exception) {
             throw IllegalArgumentException("Ключ повреждён")
         }
         val title = root.optString("description").trim().ifBlank { root.optString("name").trim() }
+        val expiresAt = SubscriptionExpiry.parseIsoToMillis(
+            root.optString("expiresAt").ifBlank { root.optString("expires_at") },
+        )
+        val panelUrl = root.optString("panelUrl").ifBlank { root.optString("panel_url") }
+            .trim()
+            .trimEnd('/')
+            .ifBlank { null }
         val containers = root.optJSONArray("containers")
             ?: throw IllegalArgumentException("Ключ не распознан")
         var bestRank = Int.MAX_VALUE
@@ -125,7 +144,24 @@ object KeyImport {
         if (bestConf.isBlank() || bestRank > 1) {
             throw IllegalArgumentException("Этот ключ не поддерживается")
         }
-        return title to bestConf
+        return DecodedVpn(title, bestConf, expiresAt ?: expiresAtFromConf(bestConf), panelUrl)
+    }
+
+    private fun expiresAtFromConf(conf: String): Long? {
+        for (raw in conf.lineSequence()) {
+            val line = raw.trim()
+            if (line.isEmpty()) continue
+            val body = when {
+                line.startsWith("#") -> line.removePrefix("#").trim()
+                else -> line
+            }
+            val eq = body.indexOf('=')
+            if (eq <= 0) continue
+            val name = body.substring(0, eq).trim()
+            if (!name.equals("ExpiresAt", ignoreCase = true)) continue
+            return SubscriptionExpiry.parseIsoToMillis(body.substring(eq + 1).trim())
+        }
+        return null
     }
 
     private fun requireField(conf: String, name: String) {

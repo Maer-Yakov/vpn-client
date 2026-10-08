@@ -119,16 +119,35 @@ fun HomeScreen(
                     },
                 )
                 Spacer(Modifier.height(22.dp))
+                val connectedStatus = if (ui.phase == Phase.Connected) {
+                    SubscriptionExpiry.connectedStatus(active?.key?.expiresAtMillis, ui.now)
+                } else {
+                    null
+                }
                 Text(
                     text = when (ui.phase) {
                         Phase.Idle -> if (active == null) "Нет сервера" else "Отключено"
                         Phase.Connecting -> "Подключение"
-                        Phase.Connected -> "Подключено"
+                        Phase.Connected -> connectedStatus?.title ?: "Подключено"
                     },
-                    color = if (connected) PanelColors.online else PanelColors.text,
+                    color = when {
+                        ui.phase == Phase.Connected && connectedStatus?.warning == true -> PanelColors.danger
+                        connected -> PanelColors.online
+                        else -> PanelColors.text
+                    },
                     fontSize = 22.sp,
                     fontWeight = FontWeight.SemiBold,
+                    textAlign = TextAlign.Center,
                 )
+                if (ui.phase == Phase.Connected && connectedStatus?.warning == true && connectedStatus.date != null) {
+                    Text(
+                        connectedStatus.date,
+                        color = PanelColors.danger,
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Medium,
+                        modifier = Modifier.padding(top = 6.dp),
+                    )
+                }
                 if (connected) {
                     Text(
                         elapsedLabel(ui.connectedSince, ui.now),

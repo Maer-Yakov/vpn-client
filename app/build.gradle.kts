@@ -31,8 +31,8 @@ android {
         applicationId = "app.vpnadmin.client"
         minSdk = 26
         targetSdk = 36
-        versionCode = 7
-        versionName = "1.6.0"
+        versionCode = 8
+        versionName = "1.7.0"
         buildConfigField("String", "GITHUB_REPO", "\"Maer-Yakov/vpn-client\"")
         buildConfigField("String", "GITHUB_UPDATE_TOKEN", "\"$githubUpdateToken\"")
     }

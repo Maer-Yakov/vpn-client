@@ -72,6 +72,7 @@ data class UiState(
     val appUpdatedAt: Long = 0L,
     val pendingInstallApk: String? = null,
     val notice: String? = null,
+    val claimingTrial: Boolean = false,
 ) {
     val active: StoredServer?
         get() = servers.firstOrNull { it.id == activeId }
@@ -290,6 +291,57 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 throw error
             } catch (_: Exception) {
                 state.value = state.value.copy(error = "Не удалось прочитать файл", notice = null)
+            }
+        }
+    }
+
+    fun claimTrial() {
+        if (state.value.claimingTrial) return
+        viewModelScope.launch {
+            state.value = state.value.copy(claimingTrial = true, error = null, notice = null)
+            val deviceId = TrialClient.androidId(getApplication())
+            if (deviceId.isBlank()) {
+                state.value = state.value.copy(claimingTrial = false, error = "Не удалось определить устройство")
+                return@launch
+            }
+            try {
+                val raw = withContext(Dispatchers.IO) { TrialClient.claim(deviceId) }
+                val key = withContext(Dispatchers.Default) { KeyImport.parse(raw) }
+                if (state.value.phase != Phase.Idle) {
+                    try {
+                        withContext(Dispatchers.IO) { tunnels.disconnect() }
+                    } catch (error: CancellationException) {
+                        throw error
+                    } catch (error: Exception) {
+                        state.value = state.value.copy(claimingTrial = false, error = userMessage(error))
+                        return@launch
+                    }
+                }
+                val library = store.add(key)
+                rememberSince(null)
+                state.value = state.value.copy(
+                    servers = library.servers,
+                    activeId = library.activeId,
+                    screen = Screen.Home,
+                    draft = "",
+                    phase = Phase.Idle,
+                    error = null,
+                    notice = "Тестовый сервер на 1 день, скорость 1 Мбит/с",
+                    rxBytes = 0,
+                    txBytes = 0,
+                    handshake = "—",
+                    connectedSince = null,
+                    claimingTrial = false,
+                )
+            } catch (error: CancellationException) {
+                state.value = state.value.copy(claimingTrial = false)
+                throw error
+            } catch (error: Exception) {
+                state.value = state.value.copy(
+                    claimingTrial = false,
+                    notice = null,
+                    error = error.message?.takeIf { it.isNotBlank() } ?: "Не удалось получить тестовый сервер",
+                )
             }
         }
     }

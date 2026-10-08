@@ -104,6 +104,7 @@ class MainActivity : ComponentActivity() {
                             onServers = { model.show(Screen.Servers) },
                             onSettings = { model.show(Screen.Settings) },
                             onAdd = { model.show(Screen.Import) },
+                            onTrial = model::claimTrial,
                             onSupport = ::openSupport,
                             onOpenUpdate = { model.show(Screen.Update) },
                         )
@@ -111,6 +112,7 @@ class MainActivity : ComponentActivity() {
                             ui = ui,
                             onBack = { model.show(Screen.Home) },
                             onAdd = { model.show(Screen.Import) },
+                            onTrial = model::claimTrial,
                             onSelect = model::select,
                             onDelete = model::delete,
                         )

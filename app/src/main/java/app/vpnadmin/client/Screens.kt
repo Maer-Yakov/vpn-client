@@ -75,6 +75,7 @@ fun HomeScreen(
     onServers: () -> Unit,
     onSettings: () -> Unit,
     onAdd: () -> Unit,
+    onTrial: () -> Unit,
     onSupport: () -> Unit,
     onOpenUpdate: () -> Unit = {},
 ) {
@@ -198,6 +199,18 @@ fun HomeScreen(
                     }
                 }
             }
+            PanelCard(onClick = { if (!ui.claimingTrial) onTrial() }) {
+                Text("Тестовый сервер", color = PanelColors.text, fontWeight = FontWeight.SemiBold)
+                Text(
+                    if (ui.claimingTrial) {
+                        "Получаем ключ…"
+                    } else {
+                        "1 день, скорость 1 Мбит/с."
+                    },
+                    color = PanelColors.muted,
+                    fontSize = 13.sp,
+                )
+            }
             ui.updateAvailable?.let { release ->
                 PanelCard(onClick = onOpenUpdate) {
                     Text("Доступно обновление ${release.versionName}", color = PanelColors.accent, fontWeight = FontWeight.SemiBold)
@@ -219,6 +232,7 @@ fun ServersScreen(
     ui: UiState,
     onBack: () -> Unit,
     onAdd: () -> Unit,
+    onTrial: () -> Unit,
     onSelect: (String) -> Unit,
     onDelete: (String) -> Unit,
 ) {
@@ -284,6 +298,16 @@ fun ServersScreen(
                 ),
             ) {
                 Text("Добавить сервер", fontWeight = FontWeight.SemiBold)
+            }
+            TextButton(
+                onClick = onTrial,
+                enabled = !ui.claimingTrial,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Text(
+                    if (ui.claimingTrial) "Получаем тестовый сервер…" else "Тестовый сервер на 1 день",
+                    color = PanelColors.accent,
+                )
             }
             ui.error?.let {
                 Text(it, color = PanelColors.danger, fontSize = 13.sp, modifier = Modifier.padding(top = 8.dp))

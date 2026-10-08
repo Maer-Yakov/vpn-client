@@ -387,7 +387,7 @@ fun SettingsScreen(
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Column(modifier = Modifier.weight(1f)) {
                         Text("Конфигурация", color = PanelColors.text, fontWeight = FontWeight.SemiBold)
-                        Text("Сохранение и загрузка серверов", color = PanelColors.muted, fontSize = 13.sp)
+                        Text("Резервное копирование", color = PanelColors.muted, fontSize = 13.sp)
                     }
                     Text("›", color = PanelColors.muted, fontSize = 22.sp)
                 }

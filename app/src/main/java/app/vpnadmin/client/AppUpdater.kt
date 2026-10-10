@@ -38,7 +38,7 @@ object AppUpdater {
     private const val KEY_CURRENT_RELEASE_AT = "current_release_at"
     private const val CONNECT_TIMEOUT_MS = 15_000
     private const val READ_TIMEOUT_MS = 60_000
-    private const val MAX_APK_BYTES = 120L * 1024L * 1024L
+    private const val MAX_APK_BYTES = 250L * 1024L * 1024L
 
     fun lastCheckAt(context: Context): Long =
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getLong(KEY_LAST_CHECK, 0L)

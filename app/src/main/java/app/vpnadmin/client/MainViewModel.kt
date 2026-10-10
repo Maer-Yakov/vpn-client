@@ -33,6 +33,7 @@ enum class Screen {
     Import,
     Scan,
     Settings,
+    About,
     SplitTunnel,
     Update,
     Backup,
@@ -73,6 +74,7 @@ data class UiState(
     val pendingInstallApk: String? = null,
     val notice: String? = null,
     val claimingTrial: Boolean = false,
+    val lastBackupAt: Long = 0L,
 ) {
     val active: StoredServer?
         get() = servers.firstOrNull { it.id == activeId }
@@ -86,7 +88,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     init {
         val library = store.load()
-        val running = tunnels.isUp()
+        val running = tunnelRunning()
         val since = if (running) storedSince() else null
         if (!running) rememberSince(null)
         state = MutableStateFlow(
@@ -99,6 +101,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 currentVersionReleasedAt = AppUpdater.currentVersionReleasedAt(app),
                 lastUpdateCheckAt = AppUpdater.lastCheckAt(app),
                 appUpdatedAt = AppUpdater.installedAt(app),
+                lastBackupAt = storedBackupAt(app),
             ),
         )
         ui = state
@@ -108,8 +111,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         }
         checkForUpdate(manual = false)
         refreshPeerExpiry()
-        tunnels.listener = { tunnelState ->
+        tunnels.listener = listener@{ tunnelState ->
             if (tunnelState == Tunnel.State.DOWN) {
+                if (state.value.active?.key?.protocol.equals("XRay", ignoreCase = true)) return@listener
                 if (state.value.phase != Phase.Connecting) rememberSince(null)
                 state.value = state.value.copy(
                     phase = if (state.value.phase == Phase.Connecting) Phase.Connecting else Phase.Idle,
@@ -126,10 +130,26 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 delay(1_000)
                 tick += 1
                 if (state.value.phase != Phase.Connected) continue
+                val xray = state.value.active?.key?.protocol.equals("XRay", ignoreCase = true)
+                if (xray && !XraySession.isRunning(getApplication())) {
+                    rememberSince(null)
+                    state.value = state.value.copy(
+                        phase = Phase.Idle,
+                        rxBytes = 0,
+                        txBytes = 0,
+                        handshake = "—",
+                        connectedSince = null,
+                    )
+                    continue
+                }
                 var next = state.value.copy(now = System.currentTimeMillis())
                 if (tick % 2 == 0) {
                     val snapshot = withContext(Dispatchers.IO) {
-                        runCatching { tunnels.snapshot() }.getOrNull()
+                        if (xray) {
+                            XraySession.snapshot(getApplication())
+                        } else {
+                            runCatching { tunnels.snapshot() }.getOrNull()
+                        }
                     }
                     if (snapshot != null) {
                         next = next.copy(
@@ -161,7 +181,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     fun refreshConnection() {
         if (state.value.phase == Phase.Connecting) return
-        val running = tunnels.isUp()
+        val running = tunnelRunning()
         if (running && state.value.phase != Phase.Connected) {
             val since = storedSince()
             state.value = state.value.copy(
@@ -231,9 +251,16 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun onBackupSaved() {
+        val savedAt = System.currentTimeMillis()
+        getApplication<Application>()
+            .getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            .edit()
+            .putLong(KEY_BACKUP, savedAt)
+            .apply()
         state.value = state.value.copy(
             error = null,
             notice = "Конфигурация сохранена на телефон",
+            lastBackupAt = savedAt,
         )
     }
 
@@ -505,6 +532,13 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         val current = state.value
         val profile = current.active ?: return
         if (state.value.phase != Phase.Idle) return
+        val wireGuard = profile.key.protocol.equals("AmneziaWG", ignoreCase = true) ||
+            profile.key.protocol.equals("WireGuard", ignoreCase = true)
+        val xray = profile.key.protocol.equals("XRay", ignoreCase = true)
+        if (!wireGuard && !xray) {
+            state.value = state.value.copy(error = "Подключение по ${profile.key.protocol} в приложении ещё не включено")
+            return
+        }
         if (profile.splitTunnel.mode != AppRouteMode.AllTraffic &&
             profile.splitTunnel.packages.none(SplitTunnelSettings::isValidPackageName)
         ) {
@@ -527,11 +561,22 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch {
             state.value = state.value.copy(phase = Phase.Connecting, error = null, screen = Screen.Home)
             try {
-                withContext(Dispatchers.IO) { tunnels.connect(profile.key.conf, profile.splitTunnel) }
+                if (xray) {
+                    if (tunnels.isUp()) withContext(Dispatchers.IO) { tunnels.disconnect() }
+                    val json = withContext(Dispatchers.IO) {
+                        XrayConfig.build(profile.key.conf, profile.splitTunnel.bypassDomains)
+                    }
+                    XraySession.connect(getApplication(), json, profile.splitTunnel)
+                } else {
+                    if (XraySession.isRunning(getApplication())) XraySession.stop(getApplication())
+                    withContext(Dispatchers.IO) { tunnels.connect(profile.key.conf, profile.splitTunnel) }
+                }
                 val started = System.currentTimeMillis()
                 rememberSince(started)
                 state.value = state.value.copy(phase = Phase.Connected, error = null, connectedSince = started, now = started)
                 refreshPeerExpiry()
+            } catch (error: CancellationException) {
+                throw error
             } catch (error: Exception) {
                 rememberSince(null)
                 state.value = state.value.copy(phase = Phase.Idle, error = userMessage(error), connectedSince = null)
@@ -541,9 +586,12 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     fun disconnect() {
         if (state.value.phase == Phase.Idle) return
+        val xray = state.value.active?.key?.protocol.equals("XRay", ignoreCase = true) ||
+            XraySession.isRunning(getApplication())
         viewModelScope.launch {
             try {
-                withContext(Dispatchers.IO) { tunnels.disconnect() }
+                if (xray) XraySession.stop(getApplication())
+                if (tunnels.isUp()) withContext(Dispatchers.IO) { tunnels.disconnect() }
             } catch (error: CancellationException) {
                 throw error
             } catch (error: Exception) {
@@ -663,6 +711,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     var installRequester: (() -> Unit)? = null
 
+    private fun tunnelRunning(): Boolean =
+        tunnels.isUp() || XraySession.isRunning(getApplication())
+
     private fun storedSince(): Long {
         val saved = getApplication<Application>()
             .getSharedPreferences(PREFS, Context.MODE_PRIVATE)
@@ -735,6 +786,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         const val MAX_BACKUP_BYTES = 2 * 1024 * 1024
         const val PREFS = "vpn_session"
         const val KEY_SINCE = "connected_since"
+        const val KEY_BACKUP = "last_backup_at"
+
+        fun storedBackupAt(app: Application): Long =
+            app.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getLong(KEY_BACKUP, 0L)
     }
 }
 

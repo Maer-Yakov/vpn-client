@@ -31,8 +31,8 @@ android {
         applicationId = "app.vpnadmin.client"
         minSdk = 26
         targetSdk = 36
-        versionCode = 8
-        versionName = "1.7.0"
+        versionCode = 9
+        versionName = "1.8.0"
         buildConfigField("String", "GITHUB_REPO", "\"Maer-Yakov/vpn-client\"")
         buildConfigField("String", "GITHUB_UPDATE_TOKEN", "\"$githubUpdateToken\"")
     }
@@ -97,6 +97,9 @@ dependencies {
     implementation("androidx.camera:camera-view:$camera")
     implementation("com.google.mlkit:barcode-scanning:17.3.0")
     implementation(project(":tunnel"))
+    // https://github.com/2dust/AndroidLibXrayLite/releases/download/v26.9.30/libv2ray.aar
+    // https://github.com/heiher/hev-socks5-tunnel/releases/download/2.18.0/hev-socks5-tunnel.aar
+    implementation(fileTree(mapOf("dir" to "libs", "include" to listOf("*.aar"))))
 
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.json:json:20240303")

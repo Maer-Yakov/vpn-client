@@ -1,6 +1,7 @@
 package app.vpnadmin.client
 
 import org.json.JSONObject
+import java.net.URLDecoder
 import java.util.Base64
 import java.util.zip.Inflater
 
@@ -28,7 +29,23 @@ object KeyImport {
             throw IllegalArgumentException("Вставьте ключ")
         }
         val uri = vpnUri.find(text)?.value
+        if (uri == null && text.contains("vless://", ignoreCase = true)) {
+            val link = Regex("""(?i)vless://\S+""").find(text)?.value
+                ?: throw IllegalArgumentException("Ключ не распознан")
+            return parseVless(link)
+        }
+        if (uri == null && text.contains("ss://", ignoreCase = true)) {
+            val link = Regex("""(?i)ss://\S+""").find(text)?.value
+                ?: throw IllegalArgumentException("Ключ не распознан")
+            return parseShadowsocks(link)
+        }
+        if (uri == null && looksLikeOpenVpn(text)) {
+            return parseOpenVpn(text)
+        }
         val decoded = if (uri != null) decodeVpnUri(uri) else null
+        if (decoded != null && !decoded.wireGuard) {
+            return protocolKey(decoded)
+        }
         val conf = (decoded?.conf ?: text).trim().replace("\r\n", "\n")
         if (!conf.contains("[Interface]", ignoreCase = true) || !conf.contains("[Peer]", ignoreCase = true)) {
             throw IllegalArgumentException("Ключ не распознан")
@@ -57,6 +74,8 @@ object KeyImport {
         val conf: String,
         val expiresAtMillis: Long?,
         val panelUrl: String?,
+        val protocol: String,
+        val wireGuard: Boolean,
     )
 
     private fun decodeVpnUri(uri: String): DecodedVpn {
@@ -122,6 +141,8 @@ object KeyImport {
             ?: throw IllegalArgumentException("Ключ не распознан")
         var bestRank = Int.MAX_VALUE
         var bestConf = ""
+        var bestProtocol = ""
+        var bestWireGuard = false
         for (index in 0 until containers.length()) {
             val container = containers.optJSONObject(index) ?: continue
             val keys = container.keys()
@@ -129,22 +150,177 @@ object KeyImport {
                 val key = keys.next()
                 val block = container.optJSONObject(key) ?: continue
                 val conf = block.optString("last_config")
-                if (!conf.contains("[Interface]", ignoreCase = true)) continue
-                val rank = when (key) {
-                    "amneziawg" -> 0
-                    "wireguard" -> 1
-                    else -> 5
-                }
-                if (rank < bestRank) {
-                    bestRank = rank
+                if (conf.isBlank()) continue
+                val matched = when (key) {
+                    "awg", "amneziawg" -> Triple(0, "AmneziaWG", true)
+                    "wireguard" -> Triple(1, "WireGuard", true)
+                    "xray" -> Triple(2, "XRay", false)
+                    "ikev2" -> Triple(3, "IKEv2", false)
+                    "openvpn" -> Triple(4, "OpenVPN", false)
+                    "cloak" -> Triple(5, "OpenVPN Cloak", false)
+                    "shadowsocks", "ss" -> Triple(6, "Shadowsocks", false)
+                    else -> null
+                } ?: continue
+                if (matched.first < bestRank) {
+                    bestRank = matched.first
+                    bestProtocol = matched.second
+                    bestWireGuard = matched.third
                     bestConf = conf
                 }
             }
         }
-        if (bestConf.isBlank() || bestRank > 1) {
+        if (bestConf.isBlank()) {
             throw IllegalArgumentException("Этот ключ не поддерживается")
         }
-        return DecodedVpn(title, bestConf, expiresAt ?: expiresAtFromConf(bestConf), panelUrl)
+        if (bestWireGuard && !bestConf.contains("[Interface]", ignoreCase = true)) {
+            throw IllegalArgumentException("Ключ не распознан")
+        }
+        return DecodedVpn(
+            title,
+            bestConf,
+            expiresAt ?: expiresAtFromConf(bestConf),
+            panelUrl,
+            bestProtocol,
+            bestWireGuard,
+        )
+    }
+
+    private fun protocolKey(decoded: DecodedVpn): ImportedKey {
+        val stored = if (decoded.conf.endsWith("\n")) decoded.conf else decoded.conf + "\n"
+        return ImportedKey(
+            title = decoded.title.ifBlank { decoded.protocol },
+            conf = stored,
+            endpoint = endpointOf(decoded.protocol, stored),
+            address = "—",
+            dns = "—",
+            protocol = decoded.protocol,
+            expiresAtMillis = decoded.expiresAtMillis,
+            panelUrl = decoded.panelUrl,
+        )
+    }
+
+    private fun endpointOf(protocol: String, conf: String): String {
+        return when (protocol) {
+            "OpenVPN", "OpenVPN Cloak" -> openVpnEndpoint(conf)
+            "Shadowsocks" -> shadowsocksEndpoint(conf)
+            "XRay" -> xrayEndpoint(conf)
+            "IKEv2" -> ikev2Endpoint(conf)
+            else -> "—"
+        }
+    }
+
+    private fun openVpnEndpoint(conf: String): String {
+        val remote = Regex("""(?m)^\s*remote\s+(\S+)\s+(\d+)""").find(conf) ?: return "—"
+        return "${remote.groupValues[1]}:${remote.groupValues[2]}"
+    }
+
+    private fun shadowsocksEndpoint(conf: String): String {
+        val json = runCatching { JSONObject(conf) }.getOrNull()
+        if (json != null) {
+            val host = json.optString("server").trim()
+            val port = json.optInt("server_port")
+            if (host.isNotBlank() && port > 0) return "$host:$port"
+        }
+        return hostPortAfterAt(decodeShadowsocks(conf.substringAfter("://").substringBefore("#")))
+    }
+
+    private fun xrayEndpoint(conf: String): String {
+        if (conf.contains("vless://", ignoreCase = true)) return parseVless(conf.trim()).endpoint
+        val root = runCatching { JSONObject(conf) }.getOrNull() ?: return "—"
+        val vnext = root.optJSONArray("outbounds")
+            ?.optJSONObject(0)
+            ?.optJSONObject("settings")
+            ?.optJSONArray("vnext")
+            ?.optJSONObject(0)
+            ?: return "—"
+        val host = vnext.optString("address").trim()
+        val port = vnext.optInt("port")
+        if (host.isBlank() || port <= 0) return "—"
+        return "$host:$port"
+    }
+
+    private fun ikev2Endpoint(conf: String): String {
+        val json = runCatching { JSONObject(conf) }.getOrNull()
+        val host = json?.optString("hostName")?.trim().orEmpty().ifBlank {
+            conf.lineSequence()
+                .map { it.trim().removePrefix("#").trim() }
+                .firstOrNull { it.startsWith("Server:", ignoreCase = true) }
+                ?.substringAfter(":")
+                ?.trim()
+                .orEmpty()
+        }
+        return host.ifBlank { "—" }
+    }
+
+    private fun parseShadowsocks(uri: String): ImportedKey {
+        val body = uri.substringAfter("://")
+        val title = decodeFragment(body.substringAfter("#", "")).ifBlank { "Shadowsocks" }
+        val userinfo = decodeShadowsocks(body.substringBefore("#"))
+        val endpoint = hostPortAfterAt(userinfo)
+        if (endpoint == "—") throw IllegalArgumentException("Ключ не распознан")
+        val stored = if (uri.endsWith("\n")) uri else "$uri\n"
+        return ImportedKey(
+            title = title,
+            conf = stored,
+            endpoint = endpoint,
+            address = "—",
+            dns = "—",
+            protocol = "Shadowsocks",
+        )
+    }
+
+    private fun parseOpenVpn(text: String): ImportedKey {
+        val protocol = if (text.contains("Cloak", ignoreCase = true)) "OpenVPN Cloak" else "OpenVPN"
+        val stored = text.trim().replace("\r\n", "\n").let { if (it.endsWith("\n")) it else "$it\n" }
+        return ImportedKey(
+            title = titleFromConf(stored).takeUnless { it == "VPN" } ?: protocol,
+            conf = stored,
+            endpoint = openVpnEndpoint(stored),
+            address = "—",
+            dns = "—",
+            protocol = protocol,
+        )
+    }
+
+    private fun decodeFragment(encoded: String): String {
+        return runCatching { URLDecoder.decode(encoded, Charsets.UTF_8.name()) }.getOrDefault(encoded).trim()
+    }
+
+    private fun decodeShadowsocks(token: String): String {
+        val encoded = token.substringBefore("@").ifBlank { token }
+        val padded = encoded + "=".repeat((4 - encoded.length % 4) % 4)
+        val bytes = runCatching { Base64.getUrlDecoder().decode(padded) }.getOrNull()
+            ?: runCatching { Base64.getDecoder().decode(padded) }.getOrNull()
+            ?: return token
+        return runCatching { String(bytes, Charsets.UTF_8) }.getOrDefault(token)
+    }
+
+    private fun hostPortAfterAt(value: String): String {
+        val hostPort = value.substringAfterLast("@", "").substringBefore("?").trim()
+        val host = hostPort.substringBefore(":").trim()
+        val port = hostPort.substringAfter(":", "").trim()
+        if (host.isBlank() || port.isBlank()) return "—"
+        return "$host:$port"
+    }
+
+    private fun parseVless(uri: String): ImportedKey {
+        val body = uri.substringAfter("://")
+        val main = body.substringBefore("#")
+        val hostPort = main.substringAfterLast("@", "").substringBefore("?")
+        val host = hostPort.substringBefore(":").trim()
+        val port = hostPort.substringAfter(":", "").trim()
+        if (host.isBlank() || port.isBlank() || !main.contains("@")) {
+            throw IllegalArgumentException("Ключ не распознан")
+        }
+        val stored = if (uri.endsWith("\n")) uri else "$uri\n"
+        return ImportedKey(
+            title = decodeFragment(body.substringAfter("#", "")).ifBlank { "XRay" },
+            conf = stored,
+            endpoint = "$host:$port",
+            address = "—",
+            dns = "—",
+            protocol = "XRay",
+        )
     }
 
     private fun expiresAtFromConf(conf: String): Long? {
@@ -192,4 +368,9 @@ object KeyImport {
     }
 
     private const val MAX_IMPORT_CHARS = 512 * 1024
+}
+
+internal fun looksLikeOpenVpn(text: String): Boolean {
+    val hasRemote = Regex("""(?m)^\s*remote\s+\S+""").containsMatchIn(text)
+    return hasRemote && (text.contains("dev tun", ignoreCase = true) || text.contains("<ca>", ignoreCase = true))
 }

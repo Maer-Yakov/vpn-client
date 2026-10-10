@@ -104,7 +104,6 @@ class MainActivity : ComponentActivity() {
                             onServers = { model.show(Screen.Servers) },
                             onSettings = { model.show(Screen.Settings) },
                             onAdd = { model.show(Screen.Import) },
-                            onTrial = model::claimTrial,
                             onSupport = ::openSupport,
                             onOpenUpdate = { model.show(Screen.Update) },
                         )
@@ -113,6 +112,7 @@ class MainActivity : ComponentActivity() {
                             onBack = { model.show(Screen.Home) },
                             onAdd = { model.show(Screen.Import) },
                             onTrial = model::claimTrial,
+                            onSupport = ::openSupport,
                             onSelect = model::select,
                             onDelete = model::delete,
                         )
@@ -138,6 +138,11 @@ class MainActivity : ComponentActivity() {
                             onSplitTunnel = { model.show(Screen.SplitTunnel) },
                             onUpdate = { model.show(Screen.Update) },
                             onBackup = { model.show(Screen.Backup) },
+                            onAbout = { model.show(Screen.About) },
+                        )
+                        Screen.About -> AboutScreen(
+                            version = BuildConfig.VERSION_NAME,
+                            onBack = { model.show(Screen.Settings) },
                         )
                         Screen.SplitTunnel -> SplitTunnelScreen(
                             ui = ui,

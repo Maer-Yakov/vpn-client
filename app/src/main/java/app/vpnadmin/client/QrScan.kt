@@ -188,5 +188,8 @@ private fun CameraPreview(onResult: (String) -> Unit, onError: () -> Unit) {
 internal fun looksLikeVpnKey(text: String): Boolean {
     val value = text.trim()
     return value.contains("vpn://") ||
+        value.contains("vless://", ignoreCase = true) ||
+        value.contains("ss://", ignoreCase = true) ||
+        looksLikeOpenVpn(value) ||
         (value.contains("[Interface]", ignoreCase = true) && value.contains("[Peer]", ignoreCase = true))
 }

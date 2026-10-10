@@ -48,11 +48,18 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.Role
@@ -75,7 +82,6 @@ fun HomeScreen(
     onServers: () -> Unit,
     onSettings: () -> Unit,
     onAdd: () -> Unit,
-    onTrial: () -> Unit,
     onSupport: () -> Unit,
     onOpenUpdate: () -> Unit = {},
 ) {
@@ -86,142 +92,141 @@ fun HomeScreen(
             (settings.mode != AppRouteMode.AllTraffic && settings.packages.any(SplitTunnelSettings::isValidPackageName))
     } == true
     Scaffold(containerColor = PanelColors.bg) { padding ->
-        Column(
+        Box(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(padding)
-                .padding(horizontal = 20.dp, vertical = 12.dp),
+                .padding(padding),
         ) {
-            TopBar(
-                title = "Mvpn",
-                action = "Настройки",
-                onAction = onSettings,
-                iconAction = true,
-                splitTunnelEnabled = splitEnabled,
+            Image(
+                painter = painterResource(R.drawable.ic_logo),
+                contentDescription = null,
+                contentScale = ContentScale.Fit,
+                modifier = Modifier
+                    .align(Alignment.Center)
+                    .size(340.dp)
+                    .alpha(0.1f),
             )
             Column(
                 modifier = Modifier
-                    .weight(1f)
-                    .fillMaxWidth(),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.Center,
+                    .fillMaxSize()
+                    .padding(horizontal = 20.dp)
+                    .padding(top = 12.dp),
             ) {
-                ConnectControl(
-                    phase = ui.phase,
-                    enabled = active != null,
-                    onClick = {
-                        when {
-                            ui.phase == Phase.Connected -> onDisconnect()
-                            ui.phase == Phase.Idle && active != null -> onConnect()
-                        }
-                    },
+                TopBar(
+                    title = "Mvpn",
+                    action = "Настройки",
+                    onAction = onSettings,
+                    iconAction = true,
+                    splitTunnelEnabled = splitEnabled,
                 )
-                Spacer(Modifier.height(22.dp))
-                val connectedStatus = if (ui.phase == Phase.Connected) {
-                    SubscriptionExpiry.connectedStatus(active?.key?.expiresAtMillis, ui.now)
-                } else {
-                    null
-                }
-                Text(
-                    text = when (ui.phase) {
-                        Phase.Idle -> if (active == null) "Нет сервера" else "Отключено"
-                        Phase.Connecting -> "Подключение"
-                        Phase.Connected -> connectedStatus?.title ?: "Подключено"
-                    },
-                    color = when {
-                        ui.phase == Phase.Connected && connectedStatus?.warning == true -> PanelColors.danger
-                        connected -> PanelColors.online
-                        else -> PanelColors.text
-                    },
-                    fontSize = 22.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    textAlign = TextAlign.Center,
-                )
-                if (ui.phase == Phase.Connected && connectedStatus?.warning == true && connectedStatus.date != null) {
+                Column(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxWidth(),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center,
+                ) {
+                    ConnectControl(
+                        phase = ui.phase,
+                        enabled = active != null,
+                        onClick = {
+                            when {
+                                ui.phase == Phase.Connected -> onDisconnect()
+                                ui.phase == Phase.Idle && active != null -> onConnect()
+                            }
+                        },
+                    )
+                    Spacer(Modifier.height(18.dp))
+                    if (active != null) {
+                        Text(
+                            active.key.title,
+                            color = PanelColors.text,
+                            fontWeight = FontWeight.SemiBold,
+                            fontSize = 18.sp,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.clickable(onClick = onServers),
+                        )
+                        Text(
+                            active.key.protocol,
+                            color = PanelColors.accent,
+                            fontSize = 13.sp,
+                            modifier = Modifier.padding(top = 4.dp),
+                        )
+                    }
+                    val connectedStatus = if (ui.phase == Phase.Connected) {
+                        SubscriptionExpiry.connectedStatus(active?.key?.expiresAtMillis, ui.now)
+                    } else {
+                        null
+                    }
                     Text(
-                        connectedStatus.date,
-                        color = PanelColors.danger,
+                        text = when (ui.phase) {
+                            Phase.Idle -> if (active == null) "Нет сервера" else "Отключено"
+                            Phase.Connecting -> "Подключение"
+                            Phase.Connected -> connectedStatus?.title ?: "Подключено"
+                        },
+                        color = when {
+                            ui.phase == Phase.Connected && connectedStatus?.warning == true -> PanelColors.danger
+                            connected -> PanelColors.online
+                            else -> PanelColors.muted
+                        },
                         fontSize = 16.sp,
                         fontWeight = FontWeight.Medium,
-                        modifier = Modifier.padding(top = 6.dp),
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.padding(top = 8.dp),
                     )
-                }
-                if (connected) {
-                    Text(
-                        elapsedLabel(ui.connectedSince, ui.now),
-                        color = PanelColors.accent,
-                        fontSize = 16.sp,
-                        modifier = Modifier.padding(top = 6.dp),
-                    )
-                }
-                if (connected) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(top = 22.dp),
-                        horizontalArrangement = Arrangement.spacedBy(10.dp),
-                    ) {
-                        StatCard("Получено", formatBytes(ui.rxBytes), Modifier.weight(1f))
-                        StatCard("Отправлено", formatBytes(ui.txBytes), Modifier.weight(1f))
+                    if (ui.phase == Phase.Connected && connectedStatus?.warning == true && connectedStatus.date != null) {
+                        Text(
+                            connectedStatus.date,
+                            color = PanelColors.danger,
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.Medium,
+                            modifier = Modifier.padding(top = 6.dp),
+                        )
                     }
-                    Text(
-                        "Рукопожатие ${ui.handshake}",
-                        color = PanelColors.muted,
-                        fontSize = 13.sp,
-                        modifier = Modifier.padding(top = 10.dp),
-                    )
-                }
-            }
-            if (active == null) {
-                PanelCard(onClick = onAdd) {
-                    Text("Добавить сервер", color = PanelColors.text, fontWeight = FontWeight.SemiBold)
-                }
-            } else {
-                PanelCard(onClick = onServers) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                active.key.title,
-                                color = PanelColors.text,
-                                fontWeight = FontWeight.SemiBold,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                            )
-                            Text(
-                                active.key.endpoint,
-                                color = PanelColors.muted,
-                                fontSize = 13.sp,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                            )
+                    if (connected) {
+                        Text(
+                            elapsedLabel(ui.connectedSince, ui.now),
+                            color = PanelColors.accent,
+                            fontSize = 16.sp,
+                            modifier = Modifier.padding(top = 6.dp),
+                        )
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(top = 22.dp),
+                            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        ) {
+                            StatCard("Получено", formatBytes(ui.rxBytes), Modifier.weight(1f))
+                            StatCard("Отправлено", formatBytes(ui.txBytes), Modifier.weight(1f))
                         }
-                        Text("›", color = PanelColors.muted, fontSize = 22.sp)
+                        Text(
+                            "Рукопожатие ${ui.handshake}",
+                            color = PanelColors.muted,
+                            fontSize = 13.sp,
+                            modifier = Modifier.padding(top = 10.dp),
+                        )
+                    } else if (active == null) {
+                        TextButton(onClick = onAdd, modifier = Modifier.padding(top = 8.dp)) {
+                            Text("Добавить сервер", color = PanelColors.accent)
+                        }
                     }
                 }
-            }
-            PanelCard(onClick = { if (!ui.claimingTrial) onTrial() }) {
-                Text("Тестовый сервер", color = PanelColors.text, fontWeight = FontWeight.SemiBold)
-                Text(
-                    if (ui.claimingTrial) {
-                        "Получаем ключ…"
-                    } else {
-                        "1 день, скорость 1 Мбит/с."
-                    },
-                    color = PanelColors.muted,
-                    fontSize = 13.sp,
-                )
-            }
-            ui.updateAvailable?.let { release ->
-                PanelCard(onClick = onOpenUpdate) {
-                    Text("Доступно обновление ${release.versionName}", color = PanelColors.accent, fontWeight = FontWeight.SemiBold)
-                    Text("Нажмите, чтобы открыть раздел «Обновление»", color = PanelColors.muted, fontSize = 13.sp)
+                ui.updateAvailable?.let { release ->
+                    PanelCard(onClick = onOpenUpdate) {
+                        Text("Доступно обновление ${release.versionName}", color = PanelColors.accent, fontWeight = FontWeight.SemiBold)
+                        Text("Нажмите, чтобы открыть раздел «Обновление»", color = PanelColors.muted, fontSize = 13.sp)
+                    }
                 }
-            }
-            ui.error?.let {
-                Text(it, color = PanelColors.danger, fontSize = 13.sp, modifier = Modifier.padding(top = 10.dp))
-            }
-            TextButton(onClick = onSupport, modifier = Modifier.align(Alignment.CenterHorizontally)) {
-                Text("Чат поддержки", color = PanelColors.accent)
+                ui.error?.let {
+                    Text(it, color = PanelColors.danger, fontSize = 13.sp, modifier = Modifier.padding(top = 10.dp))
+                }
+                BottomDock(
+                    selected = DockTab.Home,
+                    onHome = {},
+                    onServers = onServers,
+                    onChat = onSupport,
+                )
             }
         }
     }
@@ -233,6 +238,7 @@ fun ServersScreen(
     onBack: () -> Unit,
     onAdd: () -> Unit,
     onTrial: () -> Unit,
+    onSupport: () -> Unit,
     onSelect: (String) -> Unit,
     onDelete: (String) -> Unit,
 ) {
@@ -252,6 +258,8 @@ fun ServersScreen(
             ) {
                 if (ui.servers.isEmpty()) {
                     Text("Список пуст", color = PanelColors.muted)
+                } else {
+                    Text("Мои", color = PanelColors.muted, fontSize = 12.sp)
                 }
                 ui.servers.forEach { server ->
                     val selected = server.id == ui.activeId
@@ -282,12 +290,20 @@ fun ServersScreen(
                                 Text("выбран", color = PanelColors.accent, fontSize = 12.sp)
                             }
                         }
-                        Text(server.key.endpoint, color = PanelColors.muted, fontSize = 13.sp)
+                        Text(
+                            "${server.key.protocol} · ${server.key.endpoint}",
+                            color = PanelColors.muted,
+                            fontSize = 13.sp,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
                         TextButton(onClick = { onDelete(server.id) }) {
                             Text("Удалить", color = PanelColors.danger)
                         }
                     }
                 }
+                Text("Пробный", color = PanelColors.muted, fontSize = 12.sp)
+                TrialRow(claiming = ui.claimingTrial, onClick = onTrial)
             }
             Button(
                 onClick = onAdd,
@@ -299,19 +315,15 @@ fun ServersScreen(
             ) {
                 Text("Добавить сервер", fontWeight = FontWeight.SemiBold)
             }
-            TextButton(
-                onClick = onTrial,
-                enabled = !ui.claimingTrial,
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                Text(
-                    if (ui.claimingTrial) "Получаем тестовый сервер…" else "Тестовый сервер на 1 день",
-                    color = PanelColors.accent,
-                )
-            }
             ui.error?.let {
                 Text(it, color = PanelColors.danger, fontSize = 13.sp, modifier = Modifier.padding(top = 8.dp))
             }
+            BottomDock(
+                selected = DockTab.Servers,
+                onHome = onBack,
+                onServers = {},
+                onChat = onSupport,
+            )
         }
     }
 }
@@ -378,8 +390,8 @@ fun SettingsScreen(
     onSplitTunnel: () -> Unit,
     onUpdate: () -> Unit,
     onBackup: () -> Unit,
+    onAbout: () -> Unit,
 ) {
-    val key = ui.active?.key
     Scaffold(containerColor = PanelColors.bg) { padding ->
         Column(
             modifier = Modifier
@@ -390,48 +402,35 @@ fun SettingsScreen(
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             TopBar(title = "Настройки", action = "Назад", onAction = onBack)
-            if (key == null) {
-                Text("Сервер не выбран.", color = PanelColors.muted)
-            } else {
-                SettingRow("Сервер", key.title)
-                SettingRow("Адрес", key.endpoint)
-            }
-            SettingRow("Версия", version)
-            PanelCard(onClick = onSplitTunnel) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text("Раздельное туннелирование", color = PanelColors.text, fontWeight = FontWeight.SemiBold)
-                        Text("Маршрутизация выбранных приложений", color = PanelColors.muted, fontSize = 13.sp)
-                    }
-                    Text("›", color = PanelColors.muted, fontSize = 22.sp)
-                }
-            }
-            PanelCard(onClick = onUpdate) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text("Обновление", color = PanelColors.text, fontWeight = FontWeight.SemiBold)
-                        Text(
-                            if (ui.updateAvailable != null) {
-                                "Доступна ${ui.updateAvailable.versionName}"
-                            } else {
-                                "Проверка и установка новой версии"
-                            },
-                            color = if (ui.updateAvailable != null) PanelColors.accent else PanelColors.muted,
-                            fontSize = 13.sp,
-                        )
-                    }
-                    Text("›", color = PanelColors.muted, fontSize = 22.sp)
-                }
-            }
-            PanelCard(onClick = onBackup) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text("Конфигурация", color = PanelColors.text, fontWeight = FontWeight.SemiBold)
-                        Text("Резервное копирование", color = PanelColors.muted, fontSize = 13.sp)
-                    }
-                    Text("›", color = PanelColors.muted, fontSize = 22.sp)
-                }
-            }
+            MenuCard(
+                icon = R.drawable.ic_split,
+                title = "Раздельное туннелирование",
+                subtitle = "Маршрутизация выбранных приложений",
+                onClick = onSplitTunnel,
+            )
+            MenuCard(
+                icon = R.drawable.ic_menu_update,
+                title = "Обновление",
+                subtitle = if (ui.updateAvailable != null) {
+                    "Доступна ${ui.updateAvailable.versionName}"
+                } else {
+                    "Проверка и установка новой версии"
+                },
+                subtitleColor = if (ui.updateAvailable != null) PanelColors.accent else PanelColors.muted,
+                onClick = onUpdate,
+            )
+            MenuCard(
+                icon = R.drawable.ic_menu_config,
+                title = "Конфигурация",
+                subtitle = "Резервное копирование",
+                onClick = onBackup,
+            )
+            MenuCard(
+                icon = R.drawable.ic_menu_info,
+                title = "О программе",
+                subtitle = "Mvpn $version",
+                onClick = onAbout,
+            )
             ui.notice?.let { Text(it, color = PanelColors.accent, fontSize = 13.sp) }
             ui.error?.let { Text(it, color = PanelColors.danger, fontSize = 13.sp) }
             SupportLink(onSupport)
@@ -461,7 +460,10 @@ fun BackupScreen(
                 color = PanelColors.muted,
                 fontSize = 13.sp,
             )
-            SettingRow("Серверов сейчас", ui.servers.size.toString())
+            SettingRow(
+                "Последнее копирование",
+                if (ui.lastBackupAt > 0L) AppUpdater.formatDate(ui.lastBackupAt) else "ещё не было",
+            )
             Button(
                 onClick = onSave,
                 enabled = ui.servers.isNotEmpty(),
@@ -768,6 +770,39 @@ private fun InstalledAppIcon(app: InstalledApp) {
 }
 
 @Composable
+fun AboutScreen(version: String, onBack: () -> Unit) {
+    Scaffold(containerColor = PanelColors.bg) { padding ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding)
+                .padding(horizontal = 20.dp, vertical = 12.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            TopBar(title = "О программе", action = "Назад", onAction = onBack)
+            Spacer(Modifier.height(28.dp))
+            Image(
+                painter = painterResource(R.drawable.ic_logo),
+                contentDescription = "Логотип Mvpn",
+                modifier = Modifier
+                    .size(120.dp)
+                    .clip(RoundedCornerShape(28.dp)),
+            )
+            Spacer(Modifier.height(16.dp))
+            Text("Mvpn", color = PanelColors.text, fontSize = 28.sp, fontWeight = FontWeight.Bold)
+            Text("Версия $version", color = PanelColors.muted, modifier = Modifier.padding(top = 6.dp))
+            Text(
+                "Клиент для подключения к серверам VPN. Ключ можно вставить вручную или считать с QR-кода.",
+                color = PanelColors.muted,
+                fontSize = 14.sp,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.padding(top = 18.dp),
+            )
+        }
+    }
+}
+
+@Composable
 internal fun TopBar(
     title: String,
     action: String,
@@ -791,13 +826,13 @@ internal fun TopBar(
         Spacer(Modifier.width(10.dp))
         Text(title, color = PanelColors.text, fontSize = 22.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
         if (splitTunnelEnabled) {
-            Text(
-                text = "⇄",
-                color = PanelColors.accent,
-                fontSize = 22.sp,
+            Image(
+                painter = painterResource(R.drawable.ic_split),
+                contentDescription = "Раздельное туннелирование включено",
+                colorFilter = ColorFilter.tint(PanelColors.accent),
                 modifier = Modifier
-                    .padding(end = 8.dp)
-                    .semantics { contentDescription = "Раздельное туннелирование включено" },
+                    .padding(end = 4.dp)
+                    .size(22.dp),
             )
         }
         if (iconAction) {
@@ -816,6 +851,74 @@ internal fun TopBar(
                 Text(action, color = PanelColors.accent)
             }
         }
+    }
+}
+
+private enum class DockTab { Home, Servers }
+
+@Composable
+private fun BottomDock(
+    selected: DockTab,
+    onHome: () -> Unit,
+    onServers: () -> Unit,
+    onChat: () -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 8.dp, bottom = 6.dp),
+        horizontalArrangement = Arrangement.SpaceEvenly,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        DockIcon(R.drawable.ic_nav_home, "Главная", selected == DockTab.Home, onHome)
+        DockIcon(R.drawable.ic_nav_servers, "Серверы", selected == DockTab.Servers, onServers)
+        DockIcon(R.drawable.ic_nav_chat, "Чат поддержки", false, onChat)
+    }
+}
+
+@Composable
+private fun DockIcon(icon: Int, label: String, selected: Boolean, onClick: () -> Unit) {
+    IconButton(
+        onClick = onClick,
+        modifier = Modifier.semantics { contentDescription = label },
+    ) {
+        Image(
+            painter = painterResource(icon),
+            contentDescription = null,
+            colorFilter = ColorFilter.tint(if (selected) PanelColors.accent else PanelColors.muted),
+            modifier = Modifier.size(26.dp),
+        )
+    }
+}
+
+@Composable
+private fun TrialRow(claiming: Boolean, onClick: () -> Unit) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .background(PanelColors.panel)
+            .drawBehind {
+                val stroke = 1.dp.toPx()
+                drawRoundRect(
+                    color = PanelColors.line,
+                    style = Stroke(
+                        width = stroke,
+                        pathEffect = PathEffect.dashPathEffect(floatArrayOf(14f, 10f)),
+                    ),
+                    cornerRadius = CornerRadius(12.dp.toPx(), 12.dp.toPx()),
+                )
+            }
+            .clickable(enabled = !claiming, onClick = onClick)
+            .padding(14.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        Text("Тестовый сервер", color = PanelColors.text, fontWeight = FontWeight.SemiBold)
+        Text(
+            if (claiming) "Получаем ключ…" else "1 день, скорость 1 Мбит/с",
+            color = PanelColors.muted,
+            fontSize = 13.sp,
+        )
     }
 }
 
@@ -897,6 +1000,32 @@ private fun StatCard(label: String, value: String, modifier: Modifier) {
 }
 
 @Composable
+private fun MenuCard(
+    icon: Int,
+    title: String,
+    subtitle: String,
+    onClick: () -> Unit,
+    subtitleColor: Color = PanelColors.muted,
+) {
+    PanelCard(onClick = onClick) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Image(
+                painter = painterResource(icon),
+                contentDescription = null,
+                colorFilter = ColorFilter.tint(PanelColors.accent),
+                modifier = Modifier.size(24.dp),
+            )
+            Spacer(Modifier.width(12.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(title, color = PanelColors.text, fontWeight = FontWeight.SemiBold)
+                Text(subtitle, color = subtitleColor, fontSize = 13.sp)
+            }
+            Text("›", color = PanelColors.muted, fontSize = 22.sp)
+        }
+    }
+}
+
+@Composable
 private fun PanelCard(onClick: () -> Unit, content: @Composable () -> Unit) {
     Column(
         modifier = Modifier
@@ -921,9 +1050,23 @@ private fun SupportLink(onClick: () -> Unit) {
             .border(1.dp, PanelColors.line, RoundedCornerShape(12.dp))
             .clickable(onClick = onClick)
             .padding(14.dp),
-        verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
-        Text("Чат поддержки", color = PanelColors.text, fontWeight = FontWeight.SemiBold)
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Image(
+                painter = painterResource(R.drawable.ic_nav_chat),
+                contentDescription = null,
+                colorFilter = ColorFilter.tint(PanelColors.accent),
+                modifier = Modifier.size(24.dp),
+            )
+            Spacer(Modifier.width(12.dp))
+            Text(
+                "Чат поддержки",
+                color = PanelColors.text,
+                fontWeight = FontWeight.SemiBold,
+                modifier = Modifier.weight(1f),
+            )
+            Text("›", color = PanelColors.muted, fontSize = 22.sp)
+        }
     }
 }
 

@@ -210,32 +210,45 @@ object AppUpdater {
         return core.split('.').map { part -> part.toIntOrNull()?.coerceAtLeast(0) ?: 0 }
     }
 
-    private fun parseRelease(body: String): RemoteRelease? {
+    private val KNOWN_ABIS = listOf("arm64-v8a", "armeabi-v7a", "x86_64", "x86")
+
+    internal data class ApkAsset(val id: Long, val name: String, val size: Long)
+
+    /**
+     * Выбирает APK под процессор устройства. Файлы релиза называются `Mvpn-<версия>-<abi>.apk`.
+     * Старые релизы с одним APK без указания abi тоже подходят.
+     */
+    internal fun pickApk(assets: List<ApkAsset>, abis: List<String>): ApkAsset? {
+        val apks = assets.filter { it.id > 0L && it.name.endsWith(".apk", ignoreCase = true) }
+        for (abi in abis) {
+            apks.firstOrNull { it.name.endsWith("-$abi.apk", ignoreCase = true) }?.let { return it }
+        }
+        return apks.firstOrNull { asset ->
+            KNOWN_ABIS.none { asset.name.endsWith("-$it.apk", ignoreCase = true) }
+        }
+    }
+
+    internal fun parseRelease(body: String, abis: List<String> = Build.SUPPORTED_ABIS.toList()): RemoteRelease? {
         val json = JSONObject(body)
         val tag = json.optString("tag_name").trim()
         if (tag.isEmpty()) return null
         val versionName = tag.removePrefix("v").removePrefix("V")
         val publishedAt = parseIsoTime(json.optString("published_at"))
-        val assets = json.optJSONArray("assets") ?: return null
-        for (index in 0 until assets.length()) {
-            val asset = assets.optJSONObject(index) ?: continue
-            val name = asset.optString("name")
-            if (!name.endsWith(".apk", ignoreCase = true)) continue
-            val id = asset.optLong("id")
-            val size = asset.optLong("size")
-            if (id <= 0L) continue
-            return RemoteRelease(
-                tag = tag,
-                versionName = versionName,
-                publishedAtMillis = publishedAt,
-                assetId = id,
-                assetName = name,
-                assetSize = size,
-            )
+        val array = json.optJSONArray("assets") ?: return null
+        val assets = (0 until array.length()).mapNotNull { index ->
+            val asset = array.optJSONObject(index) ?: return@mapNotNull null
+            ApkAsset(asset.optLong("id"), asset.optString("name"), asset.optLong("size"))
         }
-        return null
+        val apk = pickApk(assets, abis) ?: return null
+        return RemoteRelease(
+            tag = tag,
+            versionName = versionName,
+            publishedAtMillis = publishedAt,
+            assetId = apk.id,
+            assetName = apk.name,
+            assetSize = apk.size,
+        )
     }
-
     private fun parseIsoTime(value: String): Long {
         if (value.isBlank()) return 0L
         return try {

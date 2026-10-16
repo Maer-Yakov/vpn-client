@@ -31,13 +31,19 @@ android {
         applicationId = "app.vpnadmin.client"
         minSdk = 26
         targetSdk = 36
-        versionCode = 11
-        versionName = "1.8.2"
-        ndk {
-            abiFilters += listOf("arm64-v8a")
-        }
+        versionCode = 12
+        versionName = "1.8.3"
         buildConfigField("String", "GITHUB_REPO", "\"Maer-Yakov/vpn-client\"")
         buildConfigField("String", "GITHUB_UPDATE_TOKEN", "\"$githubUpdateToken\"")
+    }
+
+    splits {
+        abi {
+            isEnable = true
+            reset()
+            include("arm64-v8a", "armeabi-v7a", "x86_64", "x86")
+            isUniversalApk = false
+        }
     }
 
     signingConfigs {

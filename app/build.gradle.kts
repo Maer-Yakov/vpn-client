@@ -31,8 +31,8 @@ android {
         applicationId = "app.vpnadmin.client"
         minSdk = 26
         targetSdk = 36
-        versionCode = 9
-        versionName = "1.8.0"
+        versionCode = 10
+        versionName = "1.8.1"
         ndk {
             abiFilters += listOf("arm64-v8a")
         }

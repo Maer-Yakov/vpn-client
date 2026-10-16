@@ -37,8 +37,17 @@ object XrayConfig {
                     .put("spiderX", link.spiderX),
             )
         } else if (link.security.equals("tls", ignoreCase = true) && link.sni.isNotBlank()) {
-            stream.put("tlsSettings", JSONObject().put("serverName", link.sni))
+            val tls = JSONObject().put("serverName", link.sni)
+            if (link.fingerprint.isNotBlank()) tls.put("fingerprint", link.fingerprint)
+            if (link.alpn.isNotBlank()) {
+                val alpn = JSONArray()
+                link.alpn.split(",").map { it.trim() }.filter { it.isNotEmpty() }.forEach { alpn.put(it) }
+                if (alpn.length() > 0) tls.put("alpn", alpn)
+            }
+            stream.put("tlsSettings", tls)
         }
+        link.xhttpSettings?.let { stream.put("xhttpSettings", it) }
+        link.kcpSettings?.let { stream.put("kcpSettings", it) }
 
         val proxy = JSONObject()
             .put("tag", "proxy")
@@ -205,8 +214,31 @@ object XrayConfig {
                 publicKey = params["pbk"].orEmpty(),
                 shortId = params["sid"].orEmpty(),
                 spiderX = params["spx"] ?: "/",
+                alpn = params["alpn"].orEmpty(),
+                xhttpSettings = xhttpFromQuery(params),
+                kcpSettings = kcpFromQuery(params),
             ),
         )
+    }
+
+    private fun xhttpFromQuery(params: Map<String, String>): JSONObject? {
+        if (!params["type"].equals("xhttp", ignoreCase = true)) return null
+        return JSONObject()
+            .put("host", params["host"].orEmpty())
+            .put("path", params["path"].orEmpty().ifBlank { "/" })
+            .put("mode", params["mode"].orEmpty().ifBlank { "stream-one" })
+    }
+
+    private fun kcpFromQuery(params: Map<String, String>): JSONObject? {
+        if (!params["type"].equals("kcp", ignoreCase = true)) return null
+        val block = JSONObject()
+            .put("tti", params["tti"]?.toIntOrNull() ?: 50)
+            .put("mtu", params["mtu"]?.toIntOrNull() ?: 1350)
+            .put("uplinkCapacity", params["uplinkCapacity"]?.toIntOrNull() ?: 5)
+            .put("downlinkCapacity", params["downlinkCapacity"]?.toIntOrNull() ?: 20)
+            .put("cwndMultiplier", params["cwndMultiplier"]?.toIntOrNull() ?: 1)
+        params["maxSendingWindow"]?.toIntOrNull()?.let { block.put("maxSendingWindow", it) }
+        return block
     }
 
     private fun parseJson(text: String): VlessLink {
@@ -229,7 +261,11 @@ object XrayConfig {
         val user = vnext.optJSONArray("users")?.optJSONObject(0)
         val stream = vless.optJSONObject("streamSettings")
         val reality = stream?.optJSONObject("realitySettings")
+        val tls = stream?.optJSONObject("tlsSettings")
         val security = stream?.optString("security").orEmpty().ifBlank { "reality" }
+        val alpn = tls?.optJSONArray("alpn")?.let { array ->
+            (0 until array.length()).joinToString(",") { array.optString(it) }
+        }.orEmpty()
         return validated(
             VlessLink(
                 uuid = user?.optString("id").orEmpty(),
@@ -240,12 +276,17 @@ object XrayConfig {
                 network = stream?.optString("network").orEmpty().ifBlank { "tcp" },
                 security = security,
                 sni = reality?.optString("serverName").orEmpty().ifBlank {
-                    stream?.optJSONObject("tlsSettings")?.optString("serverName").orEmpty()
+                    tls?.optString("serverName").orEmpty()
                 },
-                fingerprint = reality?.optString("fingerprint").orEmpty().ifBlank { "chrome" },
+                fingerprint = reality?.optString("fingerprint").orEmpty().ifBlank {
+                    tls?.optString("fingerprint").orEmpty().ifBlank { "chrome" }
+                },
                 publicKey = reality?.optString("publicKey").orEmpty(),
                 shortId = reality?.optString("shortId").orEmpty(),
                 spiderX = reality?.optString("spiderX") ?: "/",
+                alpn = alpn,
+                xhttpSettings = stream?.optJSONObject("xhttpSettings"),
+                kcpSettings = stream?.optJSONObject("kcpSettings"),
             ),
         )
     }
@@ -258,6 +299,9 @@ object XrayConfig {
             if (link.publicKey.isBlank() || link.sni.isBlank()) {
                 throw IllegalArgumentException("В ключе XRay не хватает параметров Reality")
             }
+        }
+        if (link.security.equals("tls", ignoreCase = true) && link.sni.isBlank()) {
+            throw IllegalArgumentException("В ключе XRay не хватает SNI")
         }
         return link
     }
@@ -305,5 +349,8 @@ object XrayConfig {
         val publicKey: String,
         val shortId: String,
         val spiderX: String,
+        val alpn: String = "",
+        val xhttpSettings: JSONObject? = null,
+        val kcpSettings: JSONObject? = null,
     )
 }

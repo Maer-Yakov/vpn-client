@@ -201,6 +201,57 @@ class KeyImportTest {
         assertTrue(imported.conf.startsWith("vless://"))
     }
 
+    private val amneziaConf = """
+        [Interface]
+        PrivateKey = AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+        Address = 10.8.1.4/32
+        DNS = 1.1.1.1
+        Jc = 4
+        H1 = 1020325451-1020325460
+
+        [Peer]
+        PublicKey = BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB=
+        Endpoint = 203.0.113.10:39743
+        AllowedIPs = 0.0.0.0/0, ::/0
+        PersistentKeepalive = 25
+    """.trimIndent()
+
+    /** Как хранит last_config сам AmneziaVPN и панель: JSON-строка, текст wg-quick в поле config. */
+    private fun amneziaLastConfig(): String = JSONObject()
+        .put("config", amneziaConf)
+        .put("hostName", "203.0.113.10")
+        .put("port", 39743)
+        .put("client_ip", "10.8.1.4")
+        .put("allowed_ips", org.json.JSONArray().put("0.0.0.0/0").put("::/0"))
+        .put("Jc", "4")
+        .toString()
+
+    @Test
+    fun readsAmneziaJsonLastConfigForAwg() {
+        val imported = KeyImport.parse(panelVpnUri(vpnJson("awg", amneziaLastConfig())))
+        assertEquals("AmneziaWG", imported.protocol)
+        assertEquals("203.0.113.10:39743", imported.endpoint)
+        assertEquals("10.8.1.4", imported.address)
+        assertTrue(imported.conf.contains("[Interface]"))
+        assertTrue(imported.conf.contains("Jc = 4"))
+    }
+
+    @Test
+    fun readsAmneziaJsonLastConfigForWireGuard() {
+        val conf = amneziaConf.lines().filterNot { it.startsWith("Jc") || it.startsWith("H1") }.joinToString("\n")
+        val last = JSONObject().put("config", conf).toString()
+        val imported = KeyImport.parse(panelVpnUri(vpnJson("wireguard", last)))
+        assertEquals("WireGuard", imported.protocol)
+        assertEquals("203.0.113.10:39743", imported.endpoint)
+    }
+
+    @Test
+    fun rejectsAmneziaJsonWithoutConfigText() {
+        val last = JSONObject().put("hostName", "203.0.113.10").put("port", 39743).toString()
+        val error = runCatching { KeyImport.parse(panelVpnUri(vpnJson("awg", last))) }.exceptionOrNull()
+        assertTrue(error is IllegalArgumentException)
+    }
+
     private fun vpnJson(key: String, lastConfig: String): String {
         return JSONObject()
             .put("description", "Клиент")

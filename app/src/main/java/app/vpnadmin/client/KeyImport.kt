@@ -149,7 +149,11 @@ object KeyImport {
             while (keys.hasNext()) {
                 val key = keys.next()
                 val block = container.optJSONObject(key) ?: continue
-                val conf = block.optString("last_config")
+                val rawConf = block.optString("last_config")
+                if (rawConf.isBlank()) continue
+                val wireGuardKey = key == "awg" || key == "amneziawg" || key == "wireguard"
+                // AmneziaVPN хранит last_config как JSON со вложенным текстом wg-quick в поле "config".
+                val conf = if (wireGuardKey) unwrapWireGuardConfig(rawConf) else rawConf
                 if (conf.isBlank()) continue
                 val matched = when (key) {
                     "awg", "amneziawg" -> Triple(0, "AmneziaWG", true)
@@ -183,6 +187,14 @@ object KeyImport {
             bestProtocol,
             bestWireGuard,
         )
+    }
+
+    /** Принимает оба вида: готовый текст wg-quick или JSON Amnezia с полем "config". */
+    internal fun unwrapWireGuardConfig(lastConfig: String): String {
+        val trimmed = lastConfig.trim()
+        if (!trimmed.startsWith("{")) return lastConfig
+        val inner = runCatching { JSONObject(trimmed) }.getOrNull() ?: return lastConfig
+        return inner.optString("config")
     }
 
     private fun protocolKey(decoded: DecodedVpn): ImportedKey {

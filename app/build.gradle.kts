@@ -14,14 +14,8 @@ if (hasReleaseKeystore) {
     keystoreProperties.load(FileInputStream(keystorePropertiesFile))
 }
 
-val localProperties = Properties()
-val localPropertiesFile = rootProject.file("local.properties")
-if (localPropertiesFile.exists()) {
-    localProperties.load(FileInputStream(localPropertiesFile))
-}
-val githubUpdateToken = (localProperties.getProperty("github.update.token") ?: "")
-    .replace("\\", "\\\\")
-    .replace("\"", "\\\"")
+// Репозиторий Mvpn публичный, токен GitHub в APK не вшивается (раньше вшивался и утекал с каждым APK).
+val githubUpdateToken = ""
 
 android {
     namespace = "app.vpnadmin.client"
@@ -31,8 +25,8 @@ android {
         applicationId = "app.vpnadmin.client"
         minSdk = 26
         targetSdk = 36
-        versionCode = 17
-        versionName = "1.8.8"
+        versionCode = 18
+        versionName = "1.8.9"
         buildConfigField("String", "GITHUB_REPO", "\"Maer-Yakov/vpn-client\"")
         buildConfigField("String", "GITHUB_UPDATE_TOKEN", "\"$githubUpdateToken\"")
     }

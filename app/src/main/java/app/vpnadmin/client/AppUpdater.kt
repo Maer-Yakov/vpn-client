@@ -79,10 +79,8 @@ object AppUpdater {
     }
 
     fun checkLatest(context: Context, localVersionName: String = BuildConfig.VERSION_NAME): UpdateCheckResult {
+        // Репозиторий Mvpn публичный: токен не нужен и в APK не вшивается.
         val token = BuildConfig.GITHUB_UPDATE_TOKEN.trim()
-        if (token.isEmpty()) {
-            return UpdateCheckResult(null, false, "Не задан токен доступа к GitHub")
-        }
         val connection = openApi(
             url = "https://api.github.com/repos/${BuildConfig.GITHUB_REPO}/releases/latest",
             accept = "application/vnd.github+json",
@@ -112,7 +110,6 @@ object AppUpdater {
 
     fun downloadApk(context: Context, release: RemoteRelease): File {
         val token = BuildConfig.GITHUB_UPDATE_TOKEN.trim()
-        require(token.isNotEmpty()) { "Не задан токен доступа к GitHub" }
         require(release.assetSize in 1..MAX_APK_BYTES) { "Некорректный размер APK" }
 
         val dir = File(context.cacheDir, "updates").apply { mkdirs() }
@@ -269,7 +266,7 @@ object AppUpdater {
             setRequestProperty("Accept", accept)
             setRequestProperty("User-Agent", "Mvpn-Android")
             setRequestProperty("X-GitHub-Api-Version", "2022-11-28")
-            setRequestProperty("Authorization", "Bearer $token")
+            if (token.isNotBlank()) setRequestProperty("Authorization", "Bearer $token")
         }
         return connection
     }

@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<!-- Three variants of the Mvpn home, switchable via ?variant=, throwaway prototype. -->
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mvpn · варианты экрана</title>
+<style>
+  :root {
+    --bg: #0e1218; --panel: #161c25; --line: #2a3442; --text: #e8eef6;
+    --muted: #8b98a8; --accent: #3dd6c6; --ink: #06221e; --online: #3ecf8e; --danger: #e85d75;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; min-height: 100vh; background: #07090d; color: var(--text); font: 15px/1.4 "Segoe UI", system-ui, sans-serif; display: grid; place-items: center; padding: 28px 16px 108px; }
+  input { position: absolute; opacity: 0; pointer-events: none; }
+  .stage { display: grid; justify-items: center; }
+  .caption { color: var(--muted); font-size: 13px; text-align: center; max-width: 420px; }
+  .phone { width: 390px; height: 780px; background: var(--bg); border: 1px solid var(--line); border-radius: 36px; overflow: hidden; position: relative; display: none; flex-direction: column; }
+  #vA:checked ~ .stage .a, #vB:checked ~ .stage .b, #vC:checked ~ .stage .c { display: flex; }
+  .screen { flex: 1; display: flex; flex-direction: column; min-height: 0; padding: 18px 18px 12px; gap: 10px; }
+  .top, .row, .dock { display: flex; align-items: center; }
+  .top { justify-content: space-between; }
+  .top b { font-size: 18px; }
+  .ghost { color: var(--accent); cursor: pointer; }
+  .small { font-size: 12px; color: var(--muted); }
+  .grow { flex: 1; display: flex; flex-direction: column; min-height: 0; }
+  .center { align-items: center; justify-content: center; text-align: center; gap: 8px; }
+  .ring, .bar, .plus, .knob, .chip, .row, .dock label { cursor: pointer; }
+  .ring { width: 168px; height: 168px; border-radius: 50%; border: 2px solid var(--line); background: var(--panel); display: grid; place-items: center; font-weight: 700; letter-spacing: .04em; }
+  #power:checked ~ .stage .ring { border-color: var(--accent); color: var(--accent); box-shadow: 0 0 0 10px rgba(61,214,198,.08); }
+  .off, .on { display: none; }
+  #power:checked ~ .stage .on { display: inline; }
+  #power:not(:checked) ~ .stage .off { display: inline; }
+  #power:checked ~ .stage .onb { display: grid; }
+  .stats { display: none; grid-template-columns: 1fr 1fr; gap: 8px; width: 100%; }
+  .stat, .card, .row { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; }
+  .stat { padding: 12px; text-align: left; }
+  .stat b { display: block; margin-top: 4px; }
+  .pill { display: inline-flex; width: fit-content; align-self: flex-start; gap: 6px; align-items: center; border: 1px solid var(--line); border-radius: 999px; padding: 4px 10px; color: var(--accent); font-size: 12px; }
+  .center .pill { align-self: center; }
+  .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--online); }
+  .dock { border-top: 1px solid var(--line); background: #10161e; }
+  .dock label { flex: 1; text-align: center; padding: 12px 0 16px; color: var(--muted); font-size: 12px; }
+  .dock label.on { color: var(--accent); }
+  .list { display: flex; flex-direction: column; gap: 8px; overflow: auto; }
+  .row { gap: 10px; text-align: left; padding: 12px; }
+  .meta { display: flex; flex-direction: column; min-width: 0; }
+  .meta b { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .trial { border-style: dashed; }
+  .trial .dot { background: var(--muted); }
+  .plus, .bar { background: var(--accent); color: var(--ink); font-weight: 700; border-radius: 12px; text-align: center; padding: 12px; }
+  #power:checked ~ .stage .bar { background: transparent; color: var(--danger); border: 1px solid var(--danger); }
+  .hero { margin: auto 0; background: var(--panel); border: 1px solid var(--line); border-radius: 22px; padding: 22px; min-height: 280px; display: flex; flex-direction: column; gap: 8px; }
+  .hero .space { flex: 1; }
+  .hero b { font-size: 28px; }
+  .dots { display: flex; gap: 6px; justify-content: center; }
+  .dots label { width: 6px; height: 6px; border-radius: 50%; background: var(--line); }
+  #s0:checked ~ .stage .d0, #s1:checked ~ .stage .d1, #s2:checked ~ .stage .d2, #s3:checked ~ .stage .d3 { background: var(--accent); }
+  #s0:checked ~ .stage .r0, #s1:checked ~ .stage .r1, #s2:checked ~ .stage .r2, #s3:checked ~ .stage .r3, #s4:checked ~ .stage .r4 { border-color: var(--accent); }
+  .name0, .name1, .name2, .name3, .name4, .end0, .end1, .end2, .end3, .end4, .proto0, .proto1, .proto2, .proto3, .proto4 { display: none; }
+  #s0:checked ~ .stage .name0, #s0:checked ~ .stage .end0, #s0:checked ~ .stage .proto0,
+  #s1:checked ~ .stage .name1, #s1:checked ~ .stage .end1, #s1:checked ~ .stage .proto1,
+  #s2:checked ~ .stage .name2, #s2:checked ~ .stage .end2, #s2:checked ~ .stage .proto2,
+  #s3:checked ~ .stage .name3, #s3:checked ~ .stage .end3, #s3:checked ~ .stage .proto3,
+  #s4:checked ~ .stage .name4, #s4:checked ~ .stage .end4, #s4:checked ~ .stage .proto4 { display: inline; }
+  #home:checked ~ .stage .only-servers, #servers:checked ~ .stage .only-home { display: none; }
+  .power { height: 64px; border-radius: 18px; background: #10161e; border: 1px solid var(--line); display: flex; align-items: center; padding: 6px; }
+  .knob { height: 50px; width: 46%; border-radius: 14px; background: var(--panel); border: 1px solid var(--line); display: grid; place-items: center; font-weight: 700; }
+  #power:checked ~ .stage .power .knob { margin-left: auto; background: var(--accent); color: var(--ink); border-color: transparent; }
+  .filters { display: flex; gap: 6px; }
+  .chip { border: 1px solid var(--line); border-radius: 999px; padding: 6px 10px; color: var(--muted); font-size: 12px; }
+  #all:checked ~ .stage .f-all, #awg:checked ~ .stage .f-awg, #xray:checked ~ .stage .f-xray, #ike:checked ~ .stage .f-ike, #ovpn:checked ~ .stage .f-ovpn { color: var(--ink); background: var(--accent); border-color: transparent; }
+  #xray:checked ~ .stage .c .row:not(.px), #ike:checked ~ .stage .c .row:not(.pi), #ovpn:checked ~ .stage .c .row:not(.po), #awg:checked ~ .stage .c .row:not(.pa) { display: none; }
+  .sheet { display: none; position: absolute; left: 0; right: 0; bottom: 0; background: var(--panel); border-top: 1px solid var(--line); border-radius: 22px 22px 0 0; padding: 16px 18px 22px; flex-direction: column; gap: 8px; }
+  #sheet:checked ~ .stage .sheet { display: flex; }
+  .proto { display: flex; flex-wrap: wrap; gap: 6px; }
+  .proto span { border-radius: 999px; background: var(--accent); color: var(--ink); font-size: 12px; padding: 6px 10px; }
+  .switcher { position: fixed; left: 50%; bottom: 18px; transform: translateX(-50%); display: flex; align-items: center; gap: 8px; background: #f4f7fb; color: #10161e; border-radius: 999px; padding: 8px 10px; z-index: 5; }
+  .switcher label { width: 36px; height: 36px; border-radius: 50%; background: #10161e; color: #f4f7fb; display: none; place-items: center; justify-content: center; cursor: pointer; }
+  .switcher span { min-width: 220px; text-align: center; font-size: 13px; font-weight: 650; }
+  #vA:checked ~ .switcher .aA, #vB:checked ~ .switcher .aB, #vC:checked ~ .switcher .aC { display: grid; }
+  #vA:checked ~ .switcher .vname::before { content: "A · Кольцо"; }
+  #vB:checked ~ .switcher .vname::before { content: "B · Лента"; }
+  #vC:checked ~ .switcher .vname::before { content: "C · Панель"; }
+  #vA:checked ~ .caption::before { content: "A · Кольцо. "; }
+  #vB:checked ~ .caption::before { content: "B · Лента. "; }
+  #vC:checked ~ .caption::before { content: "C · Панель. "; }
+  #power:checked ~ .caption::after { content: "Подключено. Тестовый сервер только в списке серверов."; }
+  #power:not(:checked) ~ .caption::after { content: "Отключено. Тестовый сервер только в списке серверов."; }
+</style>
+</head>
+<body>
+<input type="radio" name="variant" id="vA" checked>
+<input type="radio" name="variant" id="vB">
+<input type="radio" name="variant" id="vC">
+<input type="checkbox" id="power">
+<input type="radio" name="screen" id="home" checked>
+<input type="radio" name="screen" id="servers">
+<input type="radio" name="server" id="s0" checked>
+<input type="radio" name="server" id="s1">
+<input type="radio" name="server" id="s2">
+<input type="radio" name="server" id="s3">
+<input type="radio" name="server" id="s4">
+<input type="checkbox" id="sheet">
+<input type="radio" name="filter" id="all" checked>
+<input type="radio" name="filter" id="awg">
+<input type="radio" name="filter" id="xray">
+<input type="radio" name="filter" id="ike">
+<input type="radio" name="filter" id="ovpn">
+
+<div class="stage">
+  <div class="phone a">
+    <div class="screen only-home">
+      <div class="top"><b>Mvpn</b><span class="small">Настройки</span></div>
+      <div class="grow center">
+        <label class="ring" for="power"><span class="off">ПУСК</span><span class="on">СТОП</span></label>
+        <b><span class="name0">Polar Nord</span><span class="name1">Reality</span><span class="name2">IKEv2</span><span class="name3">OpenVPN</span><span class="name4">Тестовый сервер</span></b>
+        <span class="pill"><span class="dot"></span><span class="proto0">AmneziaWG</span><span class="proto1">XRay</span><span class="proto2">IKEv2</span><span class="proto3">OpenVPN</span><span class="proto4">AmneziaWG</span></span>
+        <span class="small"><span class="off"><span class="end0">85.137.164.156:39743</span><span class="end1">85.137.164.156:443</span><span class="end2">85.137.164.156</span><span class="end3">85.137.164.156:1194</span><span class="end4">1 день · 1 Мбит/с</span></span><span class="on">Подключено 02:14</span></span>
+        <div class="stats onb"><div class="stat"><span class="small">Получено</span><b>128 МБ</b></div><div class="stat"><span class="small">Отправлено</span><b>24 МБ</b></div></div>
+      </div>
+    </div>
+    <div class="screen only-servers">
+      <div class="top"><b>Серверы</b><label class="ghost" for="home">Назад</label></div>
+      <div class="list">
+        <span class="small">Мои</span>
+        <label class="row r0" for="s0"><span class="dot"></span><span class="meta"><b>Polar Nord</b><span class="small">AmneziaWG · 85.137.164.156:39743</span></span></label>
+        <label class="row r1" for="s1"><span class="dot"></span><span class="meta"><b>Reality</b><span class="small">XRay · 85.137.164.156:443</span></span></label>
+        <label class="row r2" for="s2"><span class="dot"></span><span class="meta"><b>IKEv2</b><span class="small">IKEv2 · 85.137.164.156</span></span></label>
+        <label class="row r3" for="s3"><span class="dot"></span><span class="meta"><b>OpenVPN</b><span class="small">OpenVPN · 85.137.164.156:1194</span></span></label>
+        <span class="small">Пробный</span>
+        <label class="row trial r4" for="s4"><span class="dot"></span><span class="meta"><b>Тестовый сервер</b><span class="small">1 день · 1 Мбит/с</span></span></label>
+        <label class="plus" for="sheet">Добавить по QR</label>
+      </div>
+    </div>
+    <nav class="dock">
+      <label class="only-home on" for="home">Главная</label>
+      <label class="only-servers" for="home">Главная</label>
+      <label class="only-home" for="servers">Серверы</label>
+      <label class="only-servers on" for="servers">Серверы</label>
+      <label>Чат</label>
+    </nav>
+    <div class="sheet">
+      <b>Новый ключ</b>
+      <span class="small">QR принимается как vpn:// для всех протоколов</span>
+      <div class="proto"><span>AmneziaWG</span><span>WireGuard</span><span>XRay</span><span>OpenVPN</span><span>IKEv2</span></div>
+      <label class="plus" for="sheet">Закрыть</label>
+    </div>
+  </div>
+
+  <div class="phone b">
+    <div class="screen only-home">
+      <div class="top"><b>Mvpn</b><label class="ghost" for="servers">Серверы</label></div>
+      <div class="grow">
+        <div class="hero">
+          <span class="pill"><span class="proto0">AmneziaWG</span><span class="proto1">XRay</span><span class="proto2">IKEv2</span><span class="proto3">OpenVPN</span><span class="proto4">AmneziaWG</span></span>
+          <b><span class="name0">Polar Nord</span><span class="name1">Reality</span><span class="name2">IKEv2</span><span class="name3">OpenVPN</span><span class="name4">Тестовый сервер</span></b>
+          <span class="small"><span class="end0">85.137.164.156:39743</span><span class="end1">85.137.164.156:443</span><span class="end2">85.137.164.156</span><span class="end3">85.137.164.156:1194</span><span class="end4">1 день · 1 Мбит/с</span></span>
+          <div class="space"></div>
+          <span class="small"><span class="off">Не подключено</span><span class="on">Сессия 02:14</span></span>
+          <label class="bar" for="power"><span class="off">Подключить</span><span class="on">Отключить</span></label>
+        </div>
+        <div class="dots"><label class="d0" for="s0"></label><label class="d1" for="s1"></label><label class="d2" for="s2"></label><label class="d3" for="s3"></label></div>
+      </div>
+    </div>
+    <div class="screen only-servers">
+      <div class="top"><b>Серверы</b><label class="ghost" for="home">Закрыть</label></div>
+      <div class="list">
+        <span class="small">Мои</span>
+        <label class="row r0" for="s0"><span class="dot"></span><span class="meta"><b>Polar Nord</b><span class="small">AmneziaWG</span></span></label>
+        <label class="row r1" for="s1"><span class="dot"></span><span class="meta"><b>Reality</b><span class="small">XRay</span></span></label>
+        <label class="row r2" for="s2"><span class="dot"></span><span class="meta"><b>IKEv2</b><span class="small">IKEv2</span></span></label>
+        <label class="row r3" for="s3"><span class="dot"></span><span class="meta"><b>OpenVPN</b><span class="small">OpenVPN</span></span></label>
+        <span class="small">Пробный</span>
+        <label class="row trial r4" for="s4"><span class="dot"></span><span class="meta"><b>Тестовый сервер</b><span class="small">1 день · 1 Мбит/с</span></span></label>
+        <label class="plus" for="sheet">Добавить по QR</label>
+      </div>
+    </div>
+    <div class="sheet"><b>Новый ключ</b><span class="small">vpn:// · AmneziaWG, WireGuard, XRay, OpenVPN, IKEv2</span><label class="plus" for="sheet">Закрыть</label></div>
+  </div>
+
+  <div class="phone c">
+    <div class="screen">
+      <div class="top"><b><span class="name0">Polar Nord</span><span class="name1">Reality</span><span class="name2">IKEv2</span><span class="name3">OpenVPN</span><span class="name4">Тестовый сервер</span></b><span class="small"><span class="off">ожидание</span><span class="on">02:14</span></span></div>
+      <span class="pill"><span class="proto0">AmneziaWG</span><span class="proto1">XRay</span><span class="proto2">IKEv2</span><span class="proto3">OpenVPN</span><span class="proto4">AmneziaWG</span></span>
+      <label class="power" for="power"><span class="knob"><span class="off">Выкл</span><span class="on">Вкл</span></span></label>
+      <div class="top"><b>Серверы</b><label class="ghost" for="sheet">QR</label></div>
+      <div class="filters">
+        <label class="chip f-all" for="all">Все</label>
+        <label class="chip f-awg" for="awg">AmneziaWG</label>
+        <label class="chip f-xray" for="xray">XRay</label>
+        <label class="chip f-ike" for="ike">IKEv2</label>
+        <label class="chip f-ovpn" for="ovpn">OpenVPN</label>
+      </div>
+      <div class="list">
+        <label class="row r0 pa" for="s0"><span class="dot"></span><span class="meta"><b>Polar Nord</b><span class="small">AmneziaWG</span></span></label>
+        <label class="row r1 px" for="s1"><span class="dot"></span><span class="meta"><b>Reality</b><span class="small">XRay</span></span></label>
+        <label class="row r2 pi" for="s2"><span class="dot"></span><span class="meta"><b>IKEv2</b><span class="small">IKEv2</span></span></label>
+        <label class="row r3 po" for="s3"><span class="dot"></span><span class="meta"><b>OpenVPN</b><span class="small">OpenVPN</span></span></label>
+        <label class="row trial r4 pa" for="s4"><span class="dot"></span><span class="meta"><b>Тестовый сервер</b><span class="small">1 день · 1 Мбит/с</span></span></label>
+      </div>
+    </div>
+    <div class="sheet"><b>Новый ключ</b><div class="proto"><span>AmneziaWG</span><span>WireGuard</span><span>XRay</span><span>OpenVPN</span><span>IKEv2</span></div><label class="plus" for="sheet">Закрыть</label></div>
+  </div>
+</div>
+<p class="caption"></p>
+<div class="switcher">
+  <label class="aA" for="vC">←</label>
+  <label class="aB" for="vA">←</label>
+  <label class="aC" for="vB">←</label>
+  <span class="vname"></span>
+  <label class="aA" for="vB">→</label>
+  <label class="aB" for="vC">→</label>
+  <label class="aC" for="vA">→</label>
+</div>
+</body>
+</html>

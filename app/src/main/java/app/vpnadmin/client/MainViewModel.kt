@@ -130,6 +130,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 delay(1_000)
                 tick += 1
                 if (state.value.phase != Phase.Connected) continue
+                if (tick % PEER_SYNC_INTERVAL_TICKS == 0) refreshPeerExpiry()
                 val xray = state.value.active?.key?.protocol.equals("XRay", ignoreCase = true)
                 if (xray && !XraySession.isRunning(getApplication())) {
                     rememberSince(null)
@@ -221,20 +222,79 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         )
     }
 
+    private var peerSyncRunning = false
+
     fun refreshPeerExpiry() {
         val active = state.value.active ?: return
+        if (peerSyncRunning) return
+        peerSyncRunning = true
         viewModelScope.launch {
-            val remote = withContext(Dispatchers.IO) {
-                runCatching { PeerExpirySync.fetch(active.key) }.getOrNull()
-            } ?: return@launch
-            if (!remote.found) return@launch
-            if (remote.expiresAtMillis == active.key.expiresAtMillis) return@launch
-            val library = store.setExpiresAt(active.id, remote.expiresAtMillis)
-            state.value = state.value.copy(
-                servers = library.servers,
-                activeId = library.activeId,
-            )
+            try {
+                val remote = withContext(Dispatchers.IO) {
+                    runCatching { PeerExpirySync.fetch(active.key) }.getOrNull()
+                } ?: return@launch
+                applyPeerState(active, remote)
+            } finally {
+                peerSyncRunning = false
+            }
         }
+    }
+
+    /** Применяет ответ панели: отзыв доступа отключает туннель, смена срока обновляет профиль. */
+    private suspend fun applyPeerState(active: StoredServer, remote: PeerExpirySync.Result) {
+        if (remote.accessDenied) {
+            val reason = if (remote.revoked) StoredServer.ACCESS_DELETED else StoredServer.ACCESS_DISABLED
+            denyAccess(active.id, reason)
+            return
+        }
+        if (active.accessDenied != null) {
+            val library = runCatching { store.setAccessDenied(active.id, null) }.getOrNull()
+            if (library != null) {
+                state.value = state.value.copy(servers = library.servers, activeId = library.activeId)
+            }
+        }
+        if (!remote.found) return
+        if (remote.expiresAtMillis == active.key.expiresAtMillis) return
+        val library = store.setExpiresAt(active.id, remote.expiresAtMillis)
+        state.value = state.value.copy(
+            servers = library.servers,
+            activeId = library.activeId,
+        )
+    }
+
+    private suspend fun denyAccess(id: String, reason: String) {
+        val library = runCatching { store.setAccessDenied(id, reason) }.getOrNull()
+        if (library != null) {
+            state.value = state.value.copy(servers = library.servers, activeId = library.activeId)
+        }
+        val current = state.value
+        if (current.activeId != id || current.phase == Phase.Idle) return
+        val xray = current.active?.key?.protocol.equals("XRay", ignoreCase = true) ||
+            XraySession.isRunning(getApplication())
+        try {
+            if (xray) XraySession.stop(getApplication())
+            if (tunnels.isUp()) withContext(Dispatchers.IO) { tunnels.disconnect() }
+        } catch (error: CancellationException) {
+            throw error
+        } catch (error: Exception) {
+            state.value = state.value.copy(error = userMessage(error))
+            return
+        }
+        rememberSince(null)
+        state.value = state.value.copy(
+            phase = Phase.Idle,
+            rxBytes = 0,
+            txBytes = 0,
+            handshake = "—",
+            connectedSince = null,
+            notice = null,
+            error = accessDeniedMessage(reason),
+        )
+    }
+
+    private fun accessDeniedMessage(reason: String?): String = when (reason) {
+        StoredServer.ACCESS_DELETED -> "Ключ удалён в панели. Подключение невозможно"
+        else -> "Доступ отключён в панели. Подключение невозможно"
     }
 
     fun exportBackupText(): String? {
@@ -560,6 +620,30 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         }
         viewModelScope.launch {
             state.value = state.value.copy(phase = Phase.Connecting, error = null, screen = Screen.Home)
+            if (profile.accessDenied != null) {
+                // Панель отозвала доступ: подключаемся, только если администратор вернул клиента.
+                val remote = withContext(Dispatchers.IO) {
+                    runCatching { PeerExpirySync.fetch(profile.key) }.getOrNull()
+                }
+                if (remote == null) {
+                    state.value = state.value.copy(
+                        phase = Phase.Idle,
+                        error = "Не удалось проверить доступ в панели. ${accessDeniedMessage(profile.accessDenied)}",
+                    )
+                    return@launch
+                }
+                if (remote.accessDenied) {
+                    val reason = if (remote.revoked) StoredServer.ACCESS_DELETED else StoredServer.ACCESS_DISABLED
+                    runCatching { store.setAccessDenied(profile.id, reason) }.getOrNull()?.let { library ->
+                        state.value = state.value.copy(servers = library.servers, activeId = library.activeId)
+                    }
+                    state.value = state.value.copy(phase = Phase.Idle, error = accessDeniedMessage(reason))
+                    return@launch
+                }
+                runCatching { store.setAccessDenied(profile.id, null) }.getOrNull()?.let { library ->
+                    state.value = state.value.copy(servers = library.servers, activeId = library.activeId)
+                }
+            }
             try {
                 if (xray) {
                     if (tunnels.isUp()) withContext(Dispatchers.IO) { tunnels.disconnect() }
@@ -782,6 +866,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     private companion object {
+        const val PEER_SYNC_INTERVAL_TICKS = 20
         const val MAX_KEY_BYTES = 256 * 1024
         const val MAX_BACKUP_BYTES = 2 * 1024 * 1024
         const val PREFS = "vpn_session"

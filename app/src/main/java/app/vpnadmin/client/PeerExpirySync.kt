@@ -6,7 +6,8 @@ import java.net.URL
 import java.net.URLEncoder
 
 /**
- * Подтягивает «дату отключения пира» (expires_at) из VPN-Admin по адресу клиента.
+ * Подтягивает «дату отключения пира» (expires_at) из VPN-Admin по адресу клиента,
+ * а также признак «клиент выключен или удалён».
  */
 object PeerExpirySync {
     private const val CONNECT_TIMEOUT_MS = 8_000
@@ -15,7 +16,13 @@ object PeerExpirySync {
     data class Result(
         val found: Boolean,
         val expiresAtMillis: Long?,
-    )
+        /** false, если администратор выключил клиента или срок истёк. Старая панель поля не шлёт: тогда true. */
+        val enabled: Boolean = true,
+        /** true, только если сама панель ответила «такого пира нет». Чужой 404 сюда не попадает. */
+        val revoked: Boolean = false,
+    ) {
+        val accessDenied: Boolean get() = revoked || !enabled
+    }
 
     fun fetch(key: ImportedKey): Result? {
         val address = key.address.trim()
@@ -41,7 +48,7 @@ object PeerExpirySync {
         return bases.toList()
     }
 
-    private fun request(base: String, address: String): Result {
+    private fun request(base: String, address: String): Result? {
         val encoded = URLEncoder.encode(address, Charsets.UTF_8.name())
         val url = URL("$base/api/public/peer-expiry?address=$encoded")
         val connection = (url.openConnection() as HttpURLConnection).apply {
@@ -58,20 +65,32 @@ object PeerExpirySync {
                 ?.bufferedReader()
                 ?.use { it.readText() }
                 .orEmpty()
-            if (code == 404) return Result(found = false, expiresAtMillis = null)
-            if (code !in 200..299) {
-                throw IllegalStateException("HTTP $code")
-            }
-            val json = JSONObject(body)
-            if (json.isNull("expires_at")) {
-                return Result(found = true, expiresAtMillis = null)
-            }
-            val raw = json.optString("expires_at")
-            val millis = SubscriptionExpiry.parseIsoToMillis(raw)
-                ?: throw IllegalStateException("Bad expires_at")
-            return Result(found = true, expiresAtMillis = millis)
+            return parse(code, body)
         } finally {
             connection.disconnect()
         }
+    }
+
+    /**
+     * Разбор ответа панели. null — ответ не от панели (чужой 404, ошибка сервера): пробуем следующий адрес.
+     */
+    internal fun parse(code: Int, body: String): Result? {
+        if (code == 404) {
+            val revoked = runCatching { JSONObject(body).optBoolean("revoked", false) }.getOrDefault(false)
+            return if (revoked) Result(found = false, expiresAtMillis = null, revoked = true) else null
+        }
+        if (code !in 200..299) {
+            throw IllegalStateException("HTTP $code")
+        }
+        val json = JSONObject(body)
+        // Старая панель не шлёт enabled/active: считаем клиента включённым.
+        val enabled = json.optBoolean("enabled", true) && json.optBoolean("active", true)
+        if (json.isNull("expires_at")) {
+            return Result(found = true, expiresAtMillis = null, enabled = enabled)
+        }
+        val raw = json.optString("expires_at")
+        val millis = SubscriptionExpiry.parseIsoToMillis(raw)
+            ?: throw IllegalStateException("Bad expires_at")
+        return Result(found = true, expiresAtMillis = millis, enabled = enabled)
     }
 }

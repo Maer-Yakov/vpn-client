@@ -152,14 +152,22 @@ private fun CameraPreview(onResult: (String) -> Unit, onError: () -> Unit) {
                     return@setAnalyzer
                 }
                 val input = InputImage.fromMediaImage(media, image.imageInfo.rotationDegrees)
-                scanner.process(input)
+                val task = try {
+                    scanner.process(input)
+                } catch (_: Exception) {
+                    image.close()
+                    return@setAnalyzer
+                }
+                task
                     .addOnSuccessListener(mainExecutor) { codes ->
                         val raw = codes.mapNotNull { it.rawValue }.firstOrNull(::looksLikeVpnKey)
                         if (raw != null && handled.compareAndSet(false, true)) {
                             onResult(raw)
                         }
                     }
-                    .addOnCompleteListener(executor) { image.close() }
+                    // Не на `executor`: после скана экран закрывается, executor уже остановлен,
+                    // и отложенный колбэк ML Kit падал с RejectedExecutionException.
+                    .addOnCompleteListener(mainExecutor) { image.close() }
             }
             try {
                 provider.unbindAll()

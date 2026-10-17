@@ -161,12 +161,18 @@ fun HomeScreen(
                     }
                     Text(
                         text = when (ui.phase) {
-                            Phase.Idle -> if (active == null) "Нет сервера" else "Отключено"
+                            Phase.Idle -> when {
+                                active == null -> "Нет сервера"
+                                active.accessDenied == StoredServer.ACCESS_DELETED -> "Ключ удалён в панели"
+                                active.accessDenied != null -> "Доступ отключён в панели"
+                                else -> "Отключено"
+                            }
                             Phase.Connecting -> "Подключение"
                             Phase.Connected -> connectedStatus?.title ?: "Подключено"
                         },
                         color = when {
                             ui.phase == Phase.Connected && connectedStatus?.warning == true -> PanelColors.danger
+                            ui.phase == Phase.Idle && active?.accessDenied != null -> PanelColors.danger
                             connected -> PanelColors.online
                             else -> PanelColors.muted
                         },

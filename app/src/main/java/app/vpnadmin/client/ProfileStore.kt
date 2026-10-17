@@ -14,7 +14,14 @@ data class StoredServer(
     val id: String,
     val key: ImportedKey,
     val splitTunnel: SplitTunnelSettings = SplitTunnelSettings(),
-)
+    /** Причина, по которой панель отозвала доступ: [ACCESS_DISABLED] или [ACCESS_DELETED]. null — доступ есть. */
+    val accessDenied: String? = null,
+) {
+    companion object {
+        const val ACCESS_DISABLED = "disabled"
+        const val ACCESS_DELETED = "deleted"
+    }
+}
 
 data class ServerLibrary(
     val servers: List<StoredServer>,
@@ -94,6 +101,17 @@ class ProfileStore internal constructor(private val filesDir: File) {
         val parsed = decodeBackup(raw)
         require(parsed.servers.isNotEmpty()) { "В файле нет серверов" }
         return write(parsed.servers, parsed.activeId)
+    }
+
+    fun setAccessDenied(id: String, reason: String?): ServerLibrary {
+        val current = load()
+        requireWritable(current)
+        val target = current.servers.firstOrNull { it.id == id } ?: return current
+        if (target.accessDenied == reason) return current
+        val servers = current.servers.map { server ->
+            if (server.id == id) server.copy(accessDenied = reason) else server
+        }
+        return write(servers, current.activeId)
     }
 
     fun setExpiresAt(id: String, expiresAtMillis: Long?): ServerLibrary {
@@ -195,6 +213,7 @@ class ProfileStore internal constructor(private val filesDir: File) {
                             "panelUrl",
                             server.key.panelUrl?.takeIf { it.isNotBlank() } ?: JSONObject.NULL,
                         )
+                        .put("accessDenied", server.accessDenied ?: JSONObject.NULL)
                         .put("splitMode", server.splitTunnel.mode.name)
                         .put("splitPackages", JSONArray(server.splitTunnel.packages.sorted()))
                         .put("bypassDomains", JSONArray(server.splitTunnel.bypassDomains.sorted())),
@@ -236,6 +255,8 @@ class ProfileStore internal constructor(private val filesDir: File) {
                                 panelUrl = item.optString("panelUrl").trim().trimEnd('/').ifBlank { null },
                             ),
                             splitTunnel = readSplitTunnelSettings(item),
+                            accessDenied = item.optString("accessDenied")
+                                .takeIf { it == StoredServer.ACCESS_DISABLED || it == StoredServer.ACCESS_DELETED },
                         ),
                     )
                 }

@@ -28,6 +28,24 @@ class ProfileStoreTest {
     }
 
     @Test
+    fun accessDeniedSurvivesReloadAndCanBeCleared() {
+        val directory = Files.createTempDirectory("profile-store-denied").toFile()
+        try {
+            val store = ProfileStore(directory)
+            val profile = store.add(sampleKey()).servers.single()
+            assertEquals(null, profile.accessDenied)
+
+            store.setAccessDenied(profile.id, StoredServer.ACCESS_DELETED)
+            assertEquals(StoredServer.ACCESS_DELETED, store.load().servers.single().accessDenied)
+
+            store.setAccessDenied(profile.id, null)
+            assertEquals(null, store.load().servers.single().accessDenied)
+        } finally {
+            directory.deleteRecursively()
+        }
+    }
+
+    @Test
     fun splitSettingsSurviveProfileWriteAndReload() {
         val directory = Files.createTempDirectory("profile-store-split").toFile()
         try {

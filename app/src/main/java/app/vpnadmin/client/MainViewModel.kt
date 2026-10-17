@@ -231,7 +231,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch {
             try {
                 val remote = withContext(Dispatchers.IO) {
-                    runCatching { PeerExpirySync.fetch(active.key) }.getOrNull()
+                    runCatching {
+                        PeerExpirySync.fetch(active.key, PeerExpirySync.underlyingNetwork(getApplication()))
+                    }.getOrNull()
                 } ?: return@launch
                 applyPeerState(active, remote)
             } finally {
@@ -623,7 +625,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             if (profile.accessDenied != null) {
                 // Панель отозвала доступ: подключаемся, только если администратор вернул клиента.
                 val remote = withContext(Dispatchers.IO) {
-                    runCatching { PeerExpirySync.fetch(profile.key) }.getOrNull()
+                    runCatching {
+                        PeerExpirySync.fetch(profile.key, PeerExpirySync.underlyingNetwork(getApplication()))
+                    }.getOrNull()
                 }
                 if (remote == null) {
                     state.value = state.value.copy(

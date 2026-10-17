@@ -1,5 +1,9 @@
 package app.vpnadmin.client
 
+import android.content.Context
+import android.net.ConnectivityManager
+import android.net.Network
+import android.net.NetworkCapabilities
 import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
@@ -24,14 +28,30 @@ object PeerExpirySync {
         val accessDenied: Boolean get() = revoked || !enabled
     }
 
-    fun fetch(key: ImportedKey): Result? {
+    /**
+     * Спрашивает панель. [network] — сеть в обход VPN: если пир отключён в панели, туннель превращается
+     * в «чёрную дыру», и запрос через него до панели не дойдёт (приложение так и показывало «Подключено»).
+     */
+    fun fetch(key: ImportedKey, network: Network? = null): Result? {
         val address = key.address.trim()
         if (address.isEmpty() || address == "—") return null
         for (base in panelBases(key)) {
-            val result = runCatching { request(base, address) }.getOrNull()
+            val result = runCatching { request(base, address, network) }.getOrNull()
             if (result != null) return result
         }
         return null
+    }
+
+    /** Физическая сеть (Wi-Fi или мобильная) без VPN; null, если найти не удалось. */
+    fun underlyingNetwork(context: Context): Network? {
+        val manager = context.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager ?: return null
+        return runCatching {
+            manager.allNetworks.firstOrNull { network ->
+                val caps = manager.getNetworkCapabilities(network) ?: return@firstOrNull false
+                caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) &&
+                    !caps.hasTransport(NetworkCapabilities.TRANSPORT_VPN)
+            }
+        }.getOrNull()
     }
 
     fun panelBases(key: ImportedKey): List<String> {
@@ -48,10 +68,11 @@ object PeerExpirySync {
         return bases.toList()
     }
 
-    private fun request(base: String, address: String): Result? {
+    private fun request(base: String, address: String, network: Network?): Result? {
         val encoded = URLEncoder.encode(address, Charsets.UTF_8.name())
         val url = URL("$base/api/public/peer-expiry?address=$encoded")
-        val connection = (url.openConnection() as HttpURLConnection).apply {
+        val opened = network?.openConnection(url) ?: url.openConnection()
+        val connection = (opened as HttpURLConnection).apply {
             connectTimeout = CONNECT_TIMEOUT_MS
             readTimeout = READ_TIMEOUT_MS
             requestMethod = "GET"

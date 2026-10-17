@@ -163,8 +163,7 @@ fun HomeScreen(
                         text = when (ui.phase) {
                             Phase.Idle -> when {
                                 active == null -> "Нет сервера"
-                                active.accessDenied == StoredServer.ACCESS_DELETED -> "Ключ удалён в панели"
-                                active.accessDenied != null -> "Доступ отключён в панели"
+                                active.accessDenied != null -> "Доступ отключен"
                                 else -> "Отключено"
                             }
                             Phase.Connecting -> "Подключение"

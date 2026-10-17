@@ -290,13 +290,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             handshake = "—",
             connectedSince = null,
             notice = null,
-            error = accessDeniedMessage(reason),
+            // Причину показывает статус на главном экране, отдельной красной ошибки нет.
+            error = null,
         )
-    }
-
-    private fun accessDeniedMessage(reason: String?): String = when (reason) {
-        StoredServer.ACCESS_DELETED -> "Ключ удалён в панели. Подключение невозможно"
-        else -> "Доступ отключён в панели. Подключение невозможно"
     }
 
     fun exportBackupText(): String? {
@@ -632,7 +628,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 if (remote == null) {
                     state.value = state.value.copy(
                         phase = Phase.Idle,
-                        error = "Не удалось проверить доступ в панели. ${accessDeniedMessage(profile.accessDenied)}",
+                        error = "Не удалось проверить доступ в панели",
                     )
                     return@launch
                 }
@@ -641,7 +637,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     runCatching { store.setAccessDenied(profile.id, reason) }.getOrNull()?.let { library ->
                         state.value = state.value.copy(servers = library.servers, activeId = library.activeId)
                     }
-                    state.value = state.value.copy(phase = Phase.Idle, error = accessDeniedMessage(reason))
+                    state.value = state.value.copy(phase = Phase.Idle, error = null)
                     return@launch
                 }
                 runCatching { store.setAccessDenied(profile.id, null) }.getOrNull()?.let { library ->

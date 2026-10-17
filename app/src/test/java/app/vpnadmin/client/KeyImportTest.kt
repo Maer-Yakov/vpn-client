@@ -280,6 +280,16 @@ class KeyImportTest {
     }
 
     @Test
+    fun readsAmneziaQrWithoutVpnPrefix() {
+        val bare = panelVpnUri(vpnJson("awg", amneziaLastConfig())).removePrefix("vpn://")
+        assertTrue(looksLikeVpnKey(bare))
+        val imported = KeyImport.parse(bare)
+        assertEquals("AmneziaWG", imported.protocol)
+        assertEquals("203.0.113.10:39743", imported.endpoint)
+        assertEquals("10.8.1.4", imported.address)
+    }
+
+    @Test
     fun recognizesQrPayload() {
         assertTrue(looksLikeVpnKey("prefix vpn://abc"))
         assertTrue(looksLikeVpnKey("[Interface]\nPrivateKey = a\n[Peer]\n"))

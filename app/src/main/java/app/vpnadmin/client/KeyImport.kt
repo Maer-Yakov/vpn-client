@@ -19,6 +19,16 @@ data class ImportedKey(
 object KeyImport {
     private val vpnUri = Regex("""vpn://[A-Za-z0-9_\-=]+""")
     private val OBFUSCATION = listOf("Jc", "Jmin", "Jmax", "S1", "S2", "H1", "I1")
+    private val bareToken = Regex("""[A-Za-z0-9_\-]{64,}={0,2}""")
+
+    /**
+     * QR панели для AmneziaVPN: base64url(qCompress(json)) без префикса `vpn://`.
+     * Оригинальный Amnezia читает только такой текст, поэтому Mvpn принимает его тоже.
+     */
+    internal fun bareAmneziaToken(text: String): String? {
+        val value = text.trim()
+        return value.takeIf { bareToken.matches(it) }
+    }
 
     fun parse(raw: String): ImportedKey {
         if (raw.length > MAX_IMPORT_CHARS) {
@@ -28,7 +38,7 @@ object KeyImport {
         if (text.isEmpty()) {
             throw IllegalArgumentException("Вставьте ключ")
         }
-        val uri = vpnUri.find(text)?.value
+        val uri = vpnUri.find(text)?.value ?: bareAmneziaToken(text)?.let { "vpn://$it" }
         if (uri == null && text.contains("vless://", ignoreCase = true)) {
             val link = Regex("""(?i)vless://\S+""").find(text)?.value
                 ?: throw IllegalArgumentException("Ключ не распознан")

@@ -28,6 +28,38 @@ class ProfileStoreTest {
     }
 
     @Test
+    fun sameKeyCannotBeAddedTwice() {
+        val directory = Files.createTempDirectory("profile-store-dup").toFile()
+        try {
+            val store = ProfileStore(directory)
+            store.add(sampleKey())
+
+            // Другое название и срок, тот же приватный ключ — тот же ключ.
+            val renamed = sampleKey().copy(title = "Home", expiresAtMillis = 1_900_000_000_000L)
+            assertTrue(store.contains(renamed))
+            val error = runCatching { store.add(renamed) }.exceptionOrNull()
+            assertTrue(error is IllegalArgumentException)
+            assertEquals(ProfileStore.DUPLICATE_KEY_MESSAGE, error?.message)
+            assertEquals(1, store.load().servers.size)
+
+            val other = sampleKey().copy(conf = "[Interface]\nPrivateKey = another\n[Peer]\nPublicKey = public\n")
+            assertFalse(store.contains(other))
+            assertEquals(2, store.add(other).servers.size)
+        } finally {
+            directory.deleteRecursively()
+        }
+    }
+
+    @Test
+    fun vlessLinksWithDifferentNamesAreTheSameKey() {
+        val a = sampleKey().copy(conf = "vless://uuid@host:443?security=reality#One\n", protocol = "XRay")
+        val b = a.copy(conf = "vless://uuid@host:443?security=reality#Two\n")
+        val c = a.copy(conf = "vless://other@host:443?security=reality#One\n")
+        assertEquals(KeyImport.identity(a), KeyImport.identity(b))
+        assertFalse(KeyImport.identity(a) == KeyImport.identity(c))
+    }
+
+    @Test
     fun accessDeniedSurvivesReloadAndCanBeCleared() {
         val directory = Files.createTempDirectory("profile-store-denied").toFile()
         try {

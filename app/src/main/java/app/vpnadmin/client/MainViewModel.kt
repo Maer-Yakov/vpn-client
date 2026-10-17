@@ -392,6 +392,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             try {
                 val raw = withContext(Dispatchers.IO) { TrialClient.claim(deviceId) }
                 val key = withContext(Dispatchers.Default) { KeyImport.parse(raw) }
+                if (withContext(Dispatchers.IO) { store.contains(key) }) {
+                    state.value = state.value.copy(claimingTrial = false, notice = null, error = ProfileStore.DUPLICATE_KEY_MESSAGE)
+                    return@launch
+                }
                 if (state.value.phase != Phase.Idle) {
                     try {
                         withContext(Dispatchers.IO) { tunnels.disconnect() }
@@ -435,6 +439,15 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch {
             try {
                 val key = withContext(Dispatchers.Default) { KeyImport.parse(raw) }
+                // Проверяем до отключения туннеля: повторный ключ не должен ронять текущее соединение.
+                if (withContext(Dispatchers.IO) { store.contains(key) }) {
+                    state.value = state.value.copy(
+                        screen = Screen.Import,
+                        draft = raw,
+                        error = ProfileStore.DUPLICATE_KEY_MESSAGE,
+                    )
+                    return@launch
+                }
                 if (state.value.phase != Phase.Idle) {
                     try {
                         withContext(Dispatchers.IO) { tunnels.disconnect() }

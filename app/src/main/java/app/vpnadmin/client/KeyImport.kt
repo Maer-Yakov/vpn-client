@@ -79,6 +79,22 @@ object KeyImport {
         )
     }
 
+    /**
+     * Что делает ключ «тем же самым»: приватный ключ WireGuard/AmneziaWG (он уникален для клиента),
+     * для остальных протоколов — текст конфига без комментариев и без имени после `#` в ссылках.
+     * Название и срок не в счёт: один и тот же ключ могут прислать под другим именем.
+     */
+    fun identity(key: ImportedKey): String {
+        val privateKey = field(key.conf, "PrivateKey")
+        if (privateKey.isNotBlank()) return "wg:${key.endpoint}:$privateKey"
+        val body = key.conf.lineSequence()
+            .map { it.trim() }
+            .filter { it.isNotEmpty() && !it.startsWith("#") }
+            .joinToString("\n")
+        val link = body.startsWith("vless://", ignoreCase = true) || body.startsWith("ss://", ignoreCase = true)
+        return "conf:" + if (link) body.substringBefore("#") else body
+    }
+
     private data class DecodedVpn(
         val title: String,
         val conf: String,

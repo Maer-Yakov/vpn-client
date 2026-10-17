@@ -56,9 +56,19 @@ class ProfileStore internal constructor(private val filesDir: File) {
         }
     }
 
+    /** true, если такой ключ уже сохранён (название и срок не сравниваются). */
+    fun contains(key: ImportedKey): Boolean {
+        val identity = KeyImport.identity(key)
+        return load().servers.any { KeyImport.identity(it.key) == identity }
+    }
+
     fun add(key: ImportedKey): ServerLibrary {
         val current = load()
         requireWritable(current)
+        val identity = KeyImport.identity(key)
+        if (current.servers.any { KeyImport.identity(it.key) == identity }) {
+            throw IllegalArgumentException(DUPLICATE_KEY_MESSAGE)
+        }
         val server = StoredServer(UUID.randomUUID().toString(), key)
         val servers = current.servers + server
         return write(servers, server.id)
@@ -165,6 +175,7 @@ class ProfileStore internal constructor(private val filesDir: File) {
     companion object {
         const val BACKUP_FORMAT = "mvpn-backup"
         const val BACKUP_VERSION = 1
+        const val DUPLICATE_KEY_MESSAGE = "Этот ключ уже добавлен"
 
         fun encodeBackup(servers: List<StoredServer>, activeId: String?): String {
             val chosen = activeId?.takeIf { id -> servers.any { it.id == id } } ?: servers.firstOrNull()?.id

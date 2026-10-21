@@ -183,6 +183,16 @@ class KeyImportTest {
         assertEquals("XRay", xray.protocol)
         assertEquals("85.137.164.156:443", xray.endpoint)
 
+        val xrayFlat = KeyImport.parse(
+            panelVpnUri(
+                vpnJson(
+                    "xray",
+                    """{"outbounds":[{"settings":{"address":"85.137.164.156","port":443,"id":"aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"}}]}""",
+                ),
+            ),
+        )
+        assertEquals("85.137.164.156:443", xrayFlat.endpoint)
+
         val ike = KeyImport.parse(
             panelVpnUri(vpnJson("ikev2", """{"hostName":"85.137.164.156","userName":"client","cert":"Y2VydA==","password":""}""")),
         )

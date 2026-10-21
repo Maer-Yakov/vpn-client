@@ -239,7 +239,7 @@ class XrayVpnService : VpnService() {
         Thread({
             val controller = core ?: return@Thread
             val delayMillis = runCatching {
-                controller.measureDelay("https://www.google.com/generate_204")
+                controller.measureDelay("https://1.1.1.1/cdn-cgi/trace")
             }.getOrNull()
             if (running && delayMillis != null && delayMillis >= 0L) {
                 handshakeAt = System.currentTimeMillis()
@@ -262,7 +262,10 @@ class XrayVpnService : VpnService() {
                 }
                 "uplink" -> {
                     txBytes += value
-                    if (value > 0) Log.i(TAG, "uplink $value")
+                    if (value > 0) {
+                        handshakeAt = System.currentTimeMillis()
+                        Log.i(TAG, "uplink $value")
+                    }
                 }
             }
         }

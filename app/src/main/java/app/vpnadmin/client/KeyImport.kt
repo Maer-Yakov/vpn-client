@@ -265,14 +265,13 @@ object KeyImport {
     private fun xrayEndpoint(conf: String): String {
         if (conf.contains("vless://", ignoreCase = true)) return parseVless(conf.trim()).endpoint
         val root = runCatching { JSONObject(conf) }.getOrNull() ?: return "—"
-        val vnext = root.optJSONArray("outbounds")
+        val settings = root.optJSONArray("outbounds")
             ?.optJSONObject(0)
             ?.optJSONObject("settings")
-            ?.optJSONArray("vnext")
-            ?.optJSONObject(0)
             ?: return "—"
-        val host = vnext.optString("address").trim()
-        val port = vnext.optInt("port")
+        val vnext = settings.optJSONArray("vnext")?.optJSONObject(0)
+        val host = vnext?.optString("address").orEmpty().ifBlank { settings.optString("address") }.trim()
+        val port = vnext?.optInt("port")?.takeIf { it > 0 } ?: settings.optInt("port")
         if (host.isBlank() || port <= 0) return "—"
         return "$host:$port"
     }

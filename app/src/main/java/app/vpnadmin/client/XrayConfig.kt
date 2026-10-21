@@ -5,10 +5,12 @@ import org.json.JSONObject
 import java.net.URLDecoder
 
 /**
- * Собирает JSON ядра Xray из сохранённого ключа панели: ссылки vless:// или
- * клиентского JSON с исходящим VLESS. Телефонный трафик пишет hev-socks5-tunnel
- * в локальный SOCKS. DNS уходит в модуль DNS ядра по HTTPS на порт 443:
- * VLESS с flow xtls-rprx-vision не переносит UDP, а порт 53 через сервер обрывается.
+ * Собирает JSON ядра Xray 26.9 из ключа панели: vless:// или клиентский JSON.
+ * Исходящий VLESS — плоский address/id (vnext в 26.9 ещё читается, но ядро
+ * AndroidLibXrayLite ждёт тот же вид, что в документации Xray-core).
+ * Reality: и publicKey, и password — во втором поле ядро 26.9 ищет ключ.
+ * DNS идёт на 1.1.1.1:443 / DoH: Vision не тащит UDP, порт 53 через сервер
+ * обрывается. Рукопожатие на телефоне не зависит от google.com.
  */
 object XrayConfig {
     const val TUN_MTU = 1280
@@ -18,13 +20,15 @@ object XrayConfig {
 
     fun build(storedConf: String, bypassDomains: Set<String> = emptySet()): String {
         val link = parse(storedConf)
-        val user = JSONObject()
+        val settings = JSONObject()
+            .put("address", link.host)
+            .put("port", link.port)
             .put("id", link.uuid)
             .put("encryption", link.encryption.ifBlank { "none" })
-        if (link.flow.isNotBlank()) user.put("flow", link.flow)
+        if (link.flow.isNotBlank()) settings.put("flow", link.flow)
 
         val stream = JSONObject()
-            .put("network", link.network.ifBlank { "tcp" })
+            .put("network", if (link.network.equals("tcp", ignoreCase = true)) "raw" else link.network.ifBlank { "raw" })
             .put("security", link.security)
         if (link.security.equals("reality", ignoreCase = true)) {
             stream.put(
@@ -33,6 +37,7 @@ object XrayConfig {
                     .put("serverName", link.sni)
                     .put("fingerprint", link.fingerprint.ifBlank { "chrome" })
                     .put("publicKey", link.publicKey)
+                    .put("password", link.publicKey)
                     .put("shortId", link.shortId)
                     .put("spiderX", link.spiderX),
             )
@@ -52,18 +57,7 @@ object XrayConfig {
         val proxy = JSONObject()
             .put("tag", "proxy")
             .put("protocol", "vless")
-            .put(
-                "settings",
-                JSONObject().put(
-                    "vnext",
-                    JSONArray().put(
-                        JSONObject()
-                            .put("address", link.host)
-                            .put("port", link.port)
-                            .put("users", JSONArray().put(user)),
-                    ),
-                ),
-            )
+            .put("settings", settings)
             .put("streamSettings", stream)
 
         val root = JSONObject()
@@ -254,11 +248,10 @@ object XrayConfig {
             }
         }
         val vless = outbound ?: throw IllegalArgumentException("Ключ XRay не распознан")
-        val vnext = vless.optJSONObject("settings")
-            ?.optJSONArray("vnext")
-            ?.optJSONObject(0)
+        val settings = vless.optJSONObject("settings")
             ?: throw IllegalArgumentException("Ключ XRay не распознан")
-        val user = vnext.optJSONArray("users")?.optJSONObject(0)
+        val vnext = settings.optJSONArray("vnext")?.optJSONObject(0)
+        val user = vnext?.optJSONArray("users")?.optJSONObject(0)
         val stream = vless.optJSONObject("streamSettings")
         val reality = stream?.optJSONObject("realitySettings")
         val tls = stream?.optJSONObject("tlsSettings")
@@ -266,14 +259,22 @@ object XrayConfig {
         val alpn = tls?.optJSONArray("alpn")?.let { array ->
             (0 until array.length()).joinToString(",") { array.optString(it) }
         }.orEmpty()
+        val publicKey = reality?.optString("publicKey").orEmpty().ifBlank {
+            reality?.optString("password").orEmpty()
+        }
+        val network = stream?.optString("network").orEmpty().ifBlank {
+            stream?.optString("method").orEmpty().ifBlank { "tcp" }
+        }
         return validated(
             VlessLink(
-                uuid = user?.optString("id").orEmpty(),
-                host = vnext.optString("address").trim(),
-                port = vnext.optInt("port"),
-                encryption = user?.optString("encryption").orEmpty().ifBlank { "none" },
-                flow = user?.optString("flow").orEmpty(),
-                network = stream?.optString("network").orEmpty().ifBlank { "tcp" },
+                uuid = user?.optString("id").orEmpty().ifBlank { settings.optString("id") },
+                host = vnext?.optString("address").orEmpty().ifBlank { settings.optString("address") }.trim(),
+                port = vnext?.optInt("port")?.takeIf { it > 0 } ?: settings.optInt("port"),
+                encryption = user?.optString("encryption").orEmpty().ifBlank {
+                    settings.optString("encryption").ifBlank { "none" }
+                },
+                flow = user?.optString("flow").orEmpty().ifBlank { settings.optString("flow") },
+                network = network,
                 security = security,
                 sni = reality?.optString("serverName").orEmpty().ifBlank {
                     tls?.optString("serverName").orEmpty()
@@ -281,7 +282,7 @@ object XrayConfig {
                 fingerprint = reality?.optString("fingerprint").orEmpty().ifBlank {
                     tls?.optString("fingerprint").orEmpty().ifBlank { "chrome" }
                 },
-                publicKey = reality?.optString("publicKey").orEmpty(),
+                publicKey = publicKey,
                 shortId = reality?.optString("shortId").orEmpty(),
                 spiderX = reality?.optString("spiderX") ?: "/",
                 alpn = alpn,

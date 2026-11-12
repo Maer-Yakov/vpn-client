@@ -7,7 +7,8 @@
 | Файл | Назначение |
 |---|---|
 | `Scenariy_zanyatiya_1_Muzykalno_ritmicheskoe_razvitie.pdf` | Сценарий **для педагога** (без картинок, прямое обращение к студентам) |
-| `Prezentaciya_zanyatie_1_Muzykalno_ritmicheskoe_razvitie.pptx` | Презентация со схемами и иллюстрациями |
+| `Prezentaciya_zanyatie_1_dlya_studentov.pptx` | Презентация для студентов (14 слайдов, схемы + иллюстрации) |
+| `plan-prezentacii.md` | План презентации |
 | `konspekt.md` | Текстовый конспект |
 | `assets/` | Иллюстрации и схемы |
 | `generate_diagrams.py` / `generate_materials.py` | Скрипты пересборки материалов |
@@ -43,7 +44,7 @@ sudo apt install fonts-dejavu
 # только сценарий для педагога (без картинок)
 python3 generate_scenario_pdf.py
 
-# презентация (+ сценарий)
-python3 generate_diagrams.py
-python3 generate_materials.py
+# презентация для студентов (14 слайдов)
+python3 generate_presentation_diagrams.py
+python3 generate_student_pptx.py
 ```

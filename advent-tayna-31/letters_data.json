@@ -1,0 +1,312 @@
+[
+  {
+    "n": 1,
+    "style": "khokhloma",
+    "title": "Письмо из города Тихих Фонарей",
+    "greeting": "Здравствуй, мой добрый друг!",
+    "body": "Меня зовут Фонарщик Луми. В нашем городе погасли все 31 огонёк. Старая книга шепчет: свет вернёт тот, кто ещё умеет удивляться. Я подумал о тебе!",
+    "task": "Придумай волшебное имя, нарисуй знак Хранителя огоньков и найди на карте городскую башню.",
+    "tip": "Карта, карточка имени и знака, наклейка № 1.",
+    "scene": "Snowy fairy-tale Russian city at dawn, all street lanterns extinguished, kind young lamplighter Lumi in tall soft hat looking from clock tower window, classical Russian children's book illustration, no text"
+  },
+  {
+    "n": 2,
+    "style": "gzhel",
+    "title": "Карта, которая хранит секрет",
+    "greeting": "Мой храбрый помощник!",
+    "body": "На карте появились золотые следы и увели меня прямо в сугроб — шапка так и осталась на верхушке. Кажется, карта хочет рассказать нам тайну.",
+    "task": "Найди на карте семь символов: ключ, звезду, сердце, снежинку, часы, колокольчик и письмо.",
+    "tip": "Карта с символами, карточка исследователя, наклейка № 2.",
+    "scene": "Magical parchment city map with tiny golden footprints leading into a huge snowdrift, a soft hat sticking out of the snow, Russian storybook illustration, no text"
+  },
+  {
+    "n": 3,
+    "style": "khokhloma",
+    "title": "Снежинка, которая потеряла имя",
+    "greeting": "Дорогой мой друг!",
+    "body": "В мастерскую прилетела грустная снежинка: ей казалось, что она ничем не красива. Но во всём мире нет второй такой же! Помоги ей поверить в себя.",
+    "task": "Создай необыкновенную снежинку, укрась её и придумай имя.",
+    "tip": "Шаблон снежинки, бумага, наклейка № 3.",
+    "scene": "Cozy lamplighter workshop, tiny unique snowflake character with sad then hopeful face on a wooden table, warm lamp, Russian storybook style, no text"
+  },
+  {
+    "n": 4,
+    "style": "gzhel",
+    "title": "Пять сокровищ зимнего дома",
+    "greeting": "Срочное сообщение!",
+    "body": "Почтальон Снежок так спешил, что вручил мне носок вместо письма. Пропала коробочка зимних сокровищ. Записка гласит: собери пять маленьких чудес.",
+    "task": "Найди дома мягкое, блестящее, тёплое, ароматное и праздничное — и придумай волшебство каждого.",
+    "tip": "Карточка поиска, наклейка № 4.",
+    "scene": "Cozy Russian izba table with five winter treasures: mitten, shiny spoon, warm scarf, cinnamon, festive ribbon, storybook illustration, no text"
+  },
+  {
+    "n": 5,
+    "style": "khokhloma",
+    "title": "Вечер первого волшебного фонарика",
+    "greeting": "Дорогой Хранитель!",
+    "body": "Старый мастер сказал: некоторые огоньки не зажигаются в одиночку. Им нужно тепло любимых людей рядом. Давай проверим!",
+    "task": "Вместе украсьте бумажный фонарик, поставьте светодиодную свечу и обменяйтесь добрыми пожеланиями.",
+    "tip": "Шаблон фонарика, наклейка № 5; свеча отдельно. Без открытого огня.",
+    "scene": "Family decorating a paper lantern with safe glowing candle, old lantern master smiling in workshop, warm Russian storybook scene, no text"
+  },
+  {
+    "n": 6,
+    "style": "gzhel",
+    "title": "Невидимый друг с чердака",
+    "greeting": "У меня потрясающая новость!",
+    "body": "На чердаке часовой башни кто-то чихнул. Следы есть, а гостя не видно. Записка: «Я помогу найти последний огонёк. Но сначала меня нужно придумать».",
+    "task": "Нарисуй сказочного помощника: имя, дом и волшебную способность.",
+    "tip": "Паспорт помощника, наклейка № 6.",
+    "scene": "Dusty clock tower attic with tiny footprints in dust, old chest, moonlit snowy window, gentle mystery, Russian storybook, no text"
+  },
+  {
+    "n": 7,
+    "style": "khokhloma",
+    "title": "Тайна тихого доброго дела",
+    "greeting": "Мой замечательный друг!",
+    "body": "На улице Тихих Колокольчиков сам зажёгся фонарь: белочка тихо помогла ёжику донести корзинку. Добро без награды — тоже волшебство.",
+    "task": "Сделай маленькое доброе дело для близкого и нарисуй его.",
+    "tip": "Карточка добрых дел, наклейка № 7.",
+    "scene": "Snowy street with squirrel helping hedgehog carry a basket, one lantern glowing gold, Russian folk storybook, no text"
+  },
+  {
+    "n": 8,
+    "style": "gzhel",
+    "title": "Послание под снегом",
+    "greeting": "Здравствуй, хранитель!",
+    "body": "На пороге башни лежит белый лист. Под снегом прячется символ. Нужен настоящий хранитель, чтобы его проявить.",
+    "task": "Прояви рисунок белым восковым мелком и акварелью.",
+    "tip": "Лист, мелок, краски. Формат: сам.",
+    "scene": "White paper sheet on snowy tower threshold with faint secret symbol under snow, Russian storybook, no text"
+  },
+  {
+    "n": 9,
+    "style": "khokhloma",
+    "title": "Тропа зимних следопытов",
+    "greeting": "Мой добрый друг!",
+    "body": "Следы зовут в Лес забытых чудес. Зима оставила подсказки — их надо заметить вместе.",
+    "task": "Семейная прогулка: найдите пять признаков зимы.",
+    "tip": "Карточка наблюдений. Формат: семья.",
+    "scene": "Family following tracks into snowy pine forest of wonders, winter signs around, Russian storybook, no text"
+  },
+  {
+    "n": 10,
+    "style": "gzhel",
+    "title": "Домик для лесного гостя",
+    "greeting": "Здравствуй, помощник!",
+    "body": "Лесной житель прячется от ветра. Ему нужен тёплый домик — хоть из бумаги, хоть из конструктора.",
+    "task": "Построй домик для лесного гостя.",
+    "tip": "Развёртка домика. Формат: сам.",
+    "scene": "Tiny forest creature peeking while a child builds a small paper house shelter in snow, Russian storybook, no text"
+  },
+  {
+    "n": 11,
+    "style": "khokhloma",
+    "title": "Шифр старой совы",
+    "greeting": "Дорогой друг!",
+    "body": "Сова оставила слово «ПОМНИ», спрятанное в картинках. Разгадай её шифр.",
+    "task": "Расшифруй слово по картинкам.",
+    "tip": "Шифровальная карточка. Формат: сам.",
+    "scene": "Wise old owl on snowy branch holding a picture cipher card in moonlight forest, Russian storybook, no text"
+  },
+  {
+    "n": 12,
+    "style": "gzhel",
+    "title": "Театр оживших теней",
+    "greeting": "Привет, мой дорогой друг!",
+    "body": "Тени на стене помнят забытые истории. Включите фонарик — и сказка оживёт.",
+    "task": "Устройте семейный театр теней.",
+    "tip": "Силуэты, фонарик. Формат: семья.",
+    "scene": "Family shadow theater on a wall with fox and bird silhouettes from a flashlight, Russian storybook, no text"
+  },
+  {
+    "n": 13,
+    "style": "khokhloma",
+    "title": "Танец Северного ветра",
+    "greeting": "Здравствуй, хранитель!",
+    "body": "Северный ветер просит его развеселить. У него есть шесть движений — как в игре.",
+    "task": "Станцуй танец по шести карточкам движений.",
+    "tip": "Карточки движений. Формат: сам.",
+    "scene": "Child dancing on snowy hill under playful folk-spirit Northern Wind with scarf-like gusts, Russian storybook, no text"
+  },
+  {
+    "n": 14,
+    "style": "gzhel",
+    "title": "Запах забытых праздников",
+    "greeting": "Мой добрый друг!",
+    "body": "Сова вспоминает праздник по ароматам. Закройте глаза — и зима заговорит запахами.",
+    "task": "Семейное исследование праздничных запахов.",
+    "tip": "Карточка ароматов. Формат: семья.",
+    "scene": "Owl in cozy kitchen with cinnamon orange peel gingerbread aromas, family smelling warmly, Russian storybook, no text"
+  },
+  {
+    "n": 15,
+    "style": "khokhloma",
+    "title": "Игрушка, которая всё помнит",
+    "greeting": "Дорогой друг!",
+    "body": "Старая игрушка помнит настоящее приключение. Дай ей голос в комиксе.",
+    "task": "Придумай комикс про свою игрушку.",
+    "tip": "Лист комикса. Формат: сам.",
+    "scene": "Beloved old wooden horse toy on windowsill remembering adventures, soft snow outside, Russian storybook, no text"
+  },
+  {
+    "n": 16,
+    "style": "gzhel",
+    "title": "Почта тёплых слов",
+    "greeting": "Здравствуй, мой друг!",
+    "body": "Нашёлся мешок неотправленных писем. Самое важное письмо — то, что согревает.",
+    "task": "Сделай открытку близкому человеку.",
+    "tip": "Шаблон открытки. Формат: сам.",
+    "scene": "Snowy post office of Postman Snezhok with sack of letters and a handmade postcard, Russian storybook, no text"
+  },
+  {
+    "n": 17,
+    "style": "khokhloma",
+    "title": "Подарок без ценника",
+    "greeting": "Мой замечательный друг!",
+    "body": "Мастер говорит: лучшие подарки — от сердца, без ценника.",
+    "task": "Создайте подарок вместе с семьёй.",
+    "tip": "Подарочный ярлык. Формат: семья.",
+    "scene": "Family crafting a handmade gift in lantern workshop with old master, warm Russian storybook, no text"
+  },
+  {
+    "n": 18,
+    "style": "gzhel",
+    "title": "Мост через реку Тишины",
+    "greeting": "Срочно, хранитель!",
+    "body": "Мост сломан — почтальон Снежок не может пройти. Нужен крепкий мост.",
+    "task": "Построй устойчивый мост из конструктора или бумаги.",
+    "tip": "Материалы для строительства. Формат: сам.",
+    "scene": "Broken wooden bridge over quiet winter river, child building a sturdy new bridge, Russian storybook, no text"
+  },
+  {
+    "n": 19,
+    "style": "khokhloma",
+    "title": "Машина семейного времени",
+    "greeting": "Дорогой друг!",
+    "body": "Часы показывают не время — счастливые воспоминания. Загляните в семейный альбом.",
+    "task": "Посмотрите семейные фотографии и послушайте историю.",
+    "tip": "Лист воспоминаний. Формат: семья.",
+    "scene": "Family looking at old photo album near glowing clock tower mechanisms, warm Russian storybook, no text"
+  },
+  {
+    "n": 20,
+    "style": "gzhel",
+    "title": "Дело о пропавшей звезде",
+    "greeting": "Мой храбрый помощник!",
+    "body": "Из башенных часов исчезла звезда. Четыре загадки укажут путь.",
+    "task": "Реши четыре загадки.",
+    "tip": "Лист загадок. Формат: сам.",
+    "scene": "Clock tower face with a missing golden star, detective clues around, Russian storybook mystery for kids, no text"
+  },
+  {
+    "n": 21,
+    "style": "khokhloma",
+    "title": "Игрушка будущего",
+    "greeting": "Здравствуй, хранитель!",
+    "body": "Украшение должно сохранить мечту до следующего года.",
+    "task": "Сделай ёлочную игрушку с символом желания.",
+    "tip": "Шаблон украшения. Формат: сам.",
+    "scene": "Child making a Christmas tree ornament with a wish symbol, festive Russian storybook, no text"
+  },
+  {
+    "n": 22,
+    "style": "gzhel",
+    "title": "Снежная лаборатория",
+    "greeting": "Дорогой друг!",
+    "body": "Книга покрыта необычным снегом. Пора открыть снежную лабораторию!",
+    "task": "Создай объёмную снежную картину.",
+    "tip": "Вата, бумага. Формат: сам.",
+    "scene": "Child making a fluffy cotton snow landscape picture in a magical library, Russian storybook, no text"
+  },
+  {
+    "n": 23,
+    "style": "khokhloma",
+    "title": "Традиция, которой ещё нет",
+    "greeting": "Мой добрый друг!",
+    "body": "Часы рассказывают о семейных традициях. А какую новую придумаете вы?",
+    "task": "Придумайте новую семейную традицию.",
+    "tip": "Карточка традиции. Формат: семья.",
+    "scene": "Family by a warm fireplace inventing a new winter tradition together, Russian storybook, no text"
+  },
+  {
+    "n": 24,
+    "style": "gzhel",
+    "title": "Письмо далёкой звезде",
+    "greeting": "Здравствуй, хранитель!",
+    "body": "Звезда предлагает сохранить желания — нарисовать их бережно и честно.",
+    "task": "Нарисуй три желания.",
+    "tip": "Лист желаний. Формат: сам.",
+    "scene": "Child on tower roof under bright winter star drawing three wishes, Russian storybook, no text"
+  },
+  {
+    "n": 25,
+    "style": "khokhloma",
+    "title": "Сказка под одеялом",
+    "greeting": "Привет, мой дорогой друг!",
+    "body": "В городе ночь историй. Сказка родится, если сочинять по очереди.",
+    "task": "Вместе сочините сказку по очереди.",
+    "tip": "Карточки подсказок. Формат: семья.",
+    "scene": "Family under blankets with flashlight telling a fairy tale together, cozy Russian storybook, no text"
+  },
+  {
+    "n": 26,
+    "style": "gzhel",
+    "title": "Три маленьких чуда",
+    "greeting": "Мой замечательный друг!",
+    "body": "Ключ появляется после добрых поступков. Три маленьких чуда — три шага к свету.",
+    "task": "Выполни три маленьких добрых дела.",
+    "tip": "Карточка выбора. Формат: сам.",
+    "scene": "Child doing three tiny kind deeds in snowy town, golden key faintly appearing, Russian storybook, no text"
+  },
+  {
+    "n": 27,
+    "style": "khokhloma",
+    "title": "Гирлянда воспоминаний",
+    "greeting": "Дорогой друг!",
+    "body": "Символы хотят соединиться в цепочку тёплых дней.",
+    "task": "Сделай гирлянду из символов воспоминаний.",
+    "tip": "Бумажные полоски. Формат: сам.",
+    "scene": "Paper memory garland with symbols of key star heart snowflake being made, festive Russian storybook, no text"
+  },
+  {
+    "n": 28,
+    "style": "gzhel",
+    "title": "Книга семейных чудес",
+    "greeting": "Здравствуй, хранитель!",
+    "body": "Нашлась пустая книга воспоминаний. Страница ждёт лучших моментов года.",
+    "task": "Оформите страницу лучших моментов года.",
+    "tip": "Лист книги. Формат: семья.",
+    "scene": "Family decorating a page in a large magical memory book, library of memories, Russian storybook, no text"
+  },
+  {
+    "n": 29,
+    "style": "khokhloma",
+    "title": "Ключ к последней башне",
+    "greeting": "Мой храбрый помощник!",
+    "body": "Семь символов складываются в ключ. Последняя башня почти открыта.",
+    "task": "Собери пазл и открой конверт.",
+    "tip": "Пазл, конверт. Формат: сам.",
+    "scene": "Seven golden symbols forming a glowing key before the last tower door, Russian storybook, no text"
+  },
+  {
+    "n": 30,
+    "style": "gzhel",
+    "title": "Ночь тридцати огней",
+    "greeting": "Дорогой друг!",
+    "body": "Тридцать огоньков уже горят. Остался семейный вечер света и пожеланий.",
+    "task": "Устройте семейный вечер света и пожеланий.",
+    "tip": "Гирлянда, карточки. Формат: семья.",
+    "scene": "Family evening with thirty glowing lanterns and wish cards in snowy square, Russian storybook, no text"
+  },
+  {
+    "n": 31,
+    "style": "palekh",
+    "title": "Тайна 31-го огонька",
+    "greeting": "Мой самый главный друг!",
+    "body": "Последний огонёк живёт в сердце того, кто дарит свет. Ты был Хранителем все эти дни.",
+    "task": "Открой письмо и получи диплом Хранителя огоньков.",
+    "tip": "Письмо, диплом, огонёк № 31. Формат: семья.",
+    "scene": "Palekh lacquer miniature style Firebird and a glowing 31st heart-lantern over snowy city, black background gold and cinnabar, no text"
+  }
+]

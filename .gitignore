@@ -10,3 +10,6 @@ captures/
 keystore.properties
 release/
 app/libs/*.aar
+
+__pycache__/
+*.pyc

@@ -1087,12 +1087,15 @@ def build_pptx(output_path: Path) -> None:
 
 
 def publish_pair() -> None:
+    """PPTX — для показа; PDF-сценарий собирается отдельно без картинок."""
+    from generate_scenario_pdf import build_pdf as build_teacher_scenario
+
     require_assets()
     with tempfile.TemporaryDirectory(prefix="lesson1-build-") as tmp:
         tmpdir = Path(tmp)
         pdf_tmp = tmpdir / OUT_PDF.name
         pptx_tmp = tmpdir / OUT_PPTX.name
-        build_pdf(pdf_tmp)
+        build_teacher_scenario(pdf_tmp)
         build_pptx(pptx_tmp)
         os.replace(pdf_tmp, OUT_PDF)
         os.replace(pptx_tmp, OUT_PPTX)

@@ -6,7 +6,7 @@
 
 | Файл | Назначение |
 |---|---|
-| `Scenariy_zanyatiya_1_Muzykalno_ritmicheskoe_razvitie.pdf` | Полный сценарий занятия на 90 минут |
+| `Scenariy_zanyatiya_1_Muzykalno_ritmicheskoe_razvitie.pdf` | Сценарий **для педагога** (без картинок, прямое обращение к студентам) |
 | `Prezentaciya_zanyatie_1_Muzykalno_ritmicheskoe_razvitie.pptx` | Презентация со схемами и иллюстрациями |
 | `konspekt.md` | Текстовый конспект |
 | `assets/` | Иллюстрации и схемы |
@@ -40,8 +40,10 @@ sudo apt install fonts-dejavu
 ### Команды
 
 ```bash
+# только сценарий для педагога (без картинок)
+python3 generate_scenario_pdf.py
+
+# презентация (+ сценарий)
 python3 generate_diagrams.py
 python3 generate_materials.py
 ```
-
-`generate_materials.py` сначала проверяет наличие всех картинок в `assets/`, собирает PDF и PPTX во временные файлы и публикует пару только если обе сборки прошли успешно.

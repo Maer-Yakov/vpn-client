@@ -689,11 +689,13 @@ PPT_WHITE = RGBColor(0xFF, 0xFF, 0xFF)
 PPT_LIGHT = RGBColor(0xD6, 0xEC, 0xEE)
 
 
-def set_run(run, size=20, bold=False, color=PPT_INK, font_name="DejaVu Sans"):
+def set_run(run, size=20, bold=False, color=PPT_INK, font_name="Calibri"):
+    # Calibri/Arial open reliably in Microsoft PowerPoint on Windows.
     run.font.size = Pt(size)
     run.font.bold = bold
     run.font.color.rgb = color
     run.font.name = font_name
+    # Also set East Asian / complex script hint via latin typeface only is enough for RU in PPT.
 
 
 def add_bg(slide, r, g, b):

@@ -21,9 +21,21 @@
 | `letters_data.json` | Данные для сборки |
 | `compose_letters.py` / `compose_map.py` | Сборка карточек с кириллицей |
 
+## Печать (PDF)
+
+| Файл | Формат |
+|------|--------|
+| `tayna-31-ogonyka-print.pdf` / `Тайна_31_огонька_печатный.pdf` | Карта A4 альбом + 31 письмо A5 |
+| `print/letters-a5.pdf` | Только письма, по одному на A5 |
+| `print/letters-a4-2up.pdf` | 2 письма на лист A4 (с линией разреза) |
+| `print/map-a4-landscape.pdf` | Только карта, A4 альбом |
+
+Рекомендации: печать на плотной бумаге 160–200 г/м²; карта — цветная, можно ламинировать.
+
 ## Пересборка
 
 ```bash
 python3 compose_letters.py   # нужны scene-NN.jpg и шаблоны рамок в /opt/cursor/artifacts/assets
 python3 compose_map.py
+python3 build_print_pdf.py   # нужен пакет img2pdf
 ```

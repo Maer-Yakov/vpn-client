@@ -28,18 +28,23 @@ from font_paths import resolve_fonts
 ROOT = Path(__file__).resolve().parent
 OUT_PDF = ROOT / "Scenariy_zanyatiya_7_Muzykalno_ritmicheskoe_razvitie_1_5_3.pdf"
 
-FONTS = resolve_fonts()
+# Документ использует только regular + bold; italic-варианты не обязательны.
+FONTS = resolve_fonts(required=("regular", "bold"))
 pdfmetrics.registerFont(TTFont("DejaVu", str(FONTS["regular"])))
 pdfmetrics.registerFont(TTFont("DejaVuBold", str(FONTS["bold"])))
-pdfmetrics.registerFont(TTFont("DejaVuItalic", str(FONTS["italic"])))
-pdfmetrics.registerFont(TTFont("DejaVuBoldItalic", str(FONTS["bold_italic"])))
-pdfmetrics.registerFontFamily(
-    "DejaVu",
-    normal="DejaVu",
-    bold="DejaVuBold",
-    italic="DejaVuItalic",
-    boldItalic="DejaVuBoldItalic",
-)
+family_kwargs = {
+    "normal": "DejaVu",
+    "bold": "DejaVuBold",
+    "italic": "DejaVu",
+    "boldItalic": "DejaVuBold",
+}
+if "italic" in FONTS:
+    pdfmetrics.registerFont(TTFont("DejaVuItalic", str(FONTS["italic"])))
+    family_kwargs["italic"] = "DejaVuItalic"
+if "bold_italic" in FONTS:
+    pdfmetrics.registerFont(TTFont("DejaVuBoldItalic", str(FONTS["bold_italic"])))
+    family_kwargs["boldItalic"] = "DejaVuBoldItalic"
+pdfmetrics.registerFontFamily("DejaVu", **family_kwargs)
 
 INK = colors.Color(30 / 255, 30 / 255, 30 / 255)
 MUTED = colors.Color(70 / 255, 70 / 255, 70 / 255)

@@ -15,6 +15,13 @@ CANDIDATES = {
         str(Path.home() / ".fonts" / "DejaVuSans.ttf"),
         "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
         "/usr/share/fonts/truetype/noto/NotoSans-Regular.ttf",
+        # macOS system fallbacks with Cyrillic
+        "/System/Library/Fonts/Supplemental/Arial Unicode.ttf",
+        "/Library/Fonts/Arial Unicode.ttf",
+        "/System/Library/Fonts/Supplemental/Arial.ttf",
+        "/Library/Fonts/Arial.ttf",
+        "/System/Library/Fonts/Supplemental/Helvetica.ttc",
+        "/System/Library/Fonts/Helvetica.ttc",
     ],
     "bold": [
         "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
@@ -24,6 +31,10 @@ CANDIDATES = {
         str(Path.home() / ".fonts" / "DejaVuSans-Bold.ttf"),
         "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf",
         "/usr/share/fonts/truetype/noto/NotoSans-Bold.ttf",
+        "/System/Library/Fonts/Supplemental/Arial Bold.ttf",
+        "/Library/Fonts/Arial Bold.ttf",
+        "/System/Library/Fonts/Supplemental/Arial.ttf",
+        "/Library/Fonts/Arial.ttf",
     ],
     "italic": [
         "/usr/share/fonts/truetype/dejavu/DejaVuSans-Oblique.ttf",
@@ -33,6 +44,8 @@ CANDIDATES = {
         str(Path.home() / ".fonts" / "DejaVuSans-Oblique.ttf"),
         "/usr/share/fonts/truetype/liberation/LiberationSans-Italic.ttf",
         "/usr/share/fonts/truetype/noto/NotoSans-Italic.ttf",
+        "/System/Library/Fonts/Supplemental/Arial Italic.ttf",
+        "/Library/Fonts/Arial Italic.ttf",
     ],
     "bold_italic": [
         "/usr/share/fonts/truetype/dejavu/DejaVuSans-BoldOblique.ttf",
@@ -42,22 +55,41 @@ CANDIDATES = {
         str(Path.home() / ".fonts" / "DejaVuSans-BoldOblique.ttf"),
         "/usr/share/fonts/truetype/liberation/LiberationSans-BoldItalic.ttf",
         "/usr/share/fonts/truetype/noto/NotoSans-BoldItalic.ttf",
+        "/System/Library/Fonts/Supplemental/Arial Bold Italic.ttf",
+        "/Library/Fonts/Arial Bold Italic.ttf",
     ],
 }
 
 
-def _first_existing(paths: list[str]) -> Path:
+def _first_existing(paths: list[str]) -> Path | None:
     for raw in paths:
         path = Path(os.path.expandvars(raw)).expanduser()
         if path.is_file():
             return path
-    searched = "\n  - ".join(paths)
-    raise FileNotFoundError(
-        "Не найден шрифт с поддержкой кириллицы. Установите пакет fonts-dejavu "
-        "(Debian/Ubuntu: `sudo apt install fonts-dejavu`) или положите TTF DejaVu "
-        f"в один из путей:\n  - {searched}"
-    )
+    return None
 
 
-def resolve_fonts() -> dict[str, Path]:
-    return {kind: _first_existing(paths) for kind, paths in CANDIDATES.items()}
+def resolve_fonts(required: tuple[str, ...] = ("regular", "bold")) -> dict[str, Path]:
+    """Resolve font files. Only ``required`` variants must exist; others are optional."""
+    found: dict[str, Path] = {}
+    missing_required: list[str] = []
+    for kind, paths in CANDIDATES.items():
+        path = _first_existing(paths)
+        if path is not None:
+            found[kind] = path
+        elif kind in required:
+            missing_required.append(kind)
+
+    if missing_required:
+        searched = []
+        for kind in missing_required:
+            searched.extend(CANDIDATES[kind][:5])
+        hint = "\n  - ".join(searched)
+        raise FileNotFoundError(
+            "Не найдены обязательные шрифты с кириллицей: "
+            + ", ".join(missing_required)
+            + ". Установите fonts-dejavu (Debian/Ubuntu: `sudo apt install fonts-dejavu`) "
+            "или положите TTF DejaVu / Arial Unicode в один из путей:\n  - "
+            + hint
+        )
+    return found

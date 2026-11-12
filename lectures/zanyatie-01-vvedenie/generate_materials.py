@@ -1,15 +1,20 @@
 #!/usr/bin/env python3
 """Generate PDF lesson script and PPTX presentation for lesson 1."""
 
+from __future__ import annotations
+
+import os
+import tempfile
 from pathlib import Path
 
+from PIL import Image as PILImage
 from pptx import Presentation
 from pptx.dml.color import RGBColor
 from pptx.enum.shapes import MSO_SHAPE
-from pptx.enum.text import PP_ALIGN, MSO_ANCHOR
-from pptx.util import Inches, Pt, Emu
+from pptx.enum.text import PP_ALIGN
+from pptx.util import Inches, Pt
 from reportlab.lib import colors
-from reportlab.lib.enums import TA_CENTER, TA_JUSTIFY, TA_LEFT
+from reportlab.lib.enums import TA_CENTER, TA_JUSTIFY
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import cm, mm
@@ -18,8 +23,6 @@ from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.platypus import (
     Image as RLImage,
     KeepTogether,
-    ListFlowable,
-    ListItem,
     PageBreak,
     Paragraph,
     SimpleDocTemplate,
@@ -28,19 +31,61 @@ from reportlab.platypus import (
     TableStyle,
 )
 
+from font_paths import resolve_fonts
+
 ROOT = Path(__file__).resolve().parent
 ASSETS = ROOT / "assets"
 OUT_PDF = ROOT / "Scenariy_zanyatiya_1_Muzykalno_ritmicheskoe_razvitie.pdf"
 OUT_PPTX = ROOT / "Prezentaciya_zanyatie_1_Muzykalno_ritmicheskoe_razvitie.pptx"
 
-pdfmetrics.registerFont(TTFont("DejaVu", "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"))
-pdfmetrics.registerFont(TTFont("DejaVuBold", "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"))
+REQUIRED_ASSETS = [
+    "slide-cover.jpg",
+    "slide-children-rhythm.jpg",
+    "slide-four-skills.jpg",
+    "slide-music-characters.jpg",
+    "slide-teachers-roles.jpg",
+    "scheme-connection.png",
+    "scheme-rhythm-roles.png",
+    "scheme-concepts.png",
+    "scheme-timeline.png",
+    "scheme-roles.png",
+]
+
+FONTS = resolve_fonts()
+pdfmetrics.registerFont(TTFont("DejaVu", str(FONTS["regular"])))
+pdfmetrics.registerFont(TTFont("DejaVuBold", str(FONTS["bold"])))
+pdfmetrics.registerFont(TTFont("DejaVuItalic", str(FONTS["italic"])))
+pdfmetrics.registerFont(TTFont("DejaVuBoldItalic", str(FONTS["bold_italic"])))
+pdfmetrics.registerFontFamily(
+    "DejaVu",
+    normal="DejaVu",
+    bold="DejaVuBold",
+    italic="DejaVuItalic",
+    boldItalic="DejaVuBoldItalic",
+)
 
 TEAL = colors.Color(28 / 255, 110 / 255, 120 / 255)
 CORAL = colors.Color(196 / 255, 98 / 255, 78 / 255)
 SAND = colors.Color(245 / 255, 240 / 255, 232 / 255)
 INK = colors.Color(35 / 255, 42 / 255, 48 / 255)
 LIGHT = colors.Color(214 / 255, 236 / 255, 238 / 255)
+
+
+def require_assets() -> None:
+    missing = [name for name in REQUIRED_ASSETS if not (ASSETS / name).is_file()]
+    if missing:
+        listed = "\n  - ".join(missing)
+        raise FileNotFoundError(
+            "Не хватает файлов в assets/. Сначала выполните "
+            f"`python3 generate_diagrams.py` и убедитесь, что иллюстрации на месте:\n  - {listed}"
+        )
+
+
+def asset(name: str) -> Path:
+    path = ASSETS / name
+    if not path.is_file():
+        raise FileNotFoundError(f"Отсутствует обязательный файл: {path}")
+    return path
 
 
 def build_styles():
@@ -237,10 +282,10 @@ def add_page_number(canvas, doc):
     canvas.restoreState()
 
 
-def build_pdf():
+def build_pdf(output_path: Path) -> None:
     styles = build_styles()
     doc = SimpleDocTemplate(
-        str(OUT_PDF),
+        str(output_path),
         pagesize=A4,
         leftMargin=18 * mm,
         rightMargin=18 * mm,
@@ -260,8 +305,7 @@ def build_pdf():
     story.append(p("Введение в музыкально-ритмическое развитие ребёнка", styles["CoverTitle"]))
     story.append(p("Тема: значение ритма и движения в развитии дошкольника", styles["CoverSub"]))
     story.append(Spacer(1, 6 * mm))
-    if (ASSETS / "slide-cover.jpg").exists():
-        story.append(RLImage(str(ASSETS / "slide-cover.jpg"), width=14 * cm, height=7.8 * cm))
+    story.append(RLImage(str(asset("slide-cover.jpg")), width=14 * cm, height=7.8 * cm))
     story.append(Spacer(1, 8 * mm))
     meta = [
         ["Аудитория", "студенты — будущие воспитатели"],
@@ -309,9 +353,8 @@ def build_pdf():
     story.append(p("<b>Методы:</b> объяснительно-иллюстративный, беседа, сравнение, практический показ, упражнение, рефлексия.", styles["Body"]))
 
     story.append(p("2. Хронометраж занятия (90 минут)", styles["H1"]))
-    if (ASSETS / "scheme-timeline.png").exists():
-        story.append(RLImage(str(ASSETS / "scheme-timeline.png"), width=16.5 * cm, height=9.3 * cm))
-        story.append(Spacer(1, 3 * mm))
+    story.append(RLImage(str(asset("scheme-timeline.png")), width=16.5 * cm, height=9.3 * cm))
+    story.append(Spacer(1, 3 * mm))
 
     timeline = [
         ["Этап", "Время", "Минуты", "Содержание"],
@@ -395,8 +438,7 @@ def build_pdf():
     )
 
     story.append(p("<b>2.2. Связь музыки, движения, эмоций и интеллекта (17–24 мин) — 7 мин</b>", styles["Time"]))
-    if (ASSETS / "scheme-connection.png").exists():
-        story.append(RLImage(str(ASSETS / "scheme-connection.png"), width=16.5 * cm, height=7.2 * cm))
+    story.append(RLImage(str(asset("scheme-connection.png")), width=16.5 * cm, height=7.2 * cm))
     story.append(
         p(
             "Цепочка: <b>музыка → эмоция → движение → осмысление → закрепление в опыте</b>.",
@@ -422,8 +464,7 @@ def build_pdf():
     )
 
     story.append(p("<b>2.3. Роль ритма в развитии координации, внимания, памяти и речи (24–32 мин) — 8 мин</b>", styles["Time"]))
-    if (ASSETS / "scheme-rhythm-roles.png").exists():
-        story.append(RLImage(str(ASSETS / "scheme-rhythm-roles.png"), width=16.5 * cm, height=9.3 * cm))
+    story.append(RLImage(str(asset("scheme-rhythm-roles.png")), width=16.5 * cm, height=9.3 * cm))
     rhythm_table = [
         ["Сфера", "Что развивается", "Пример упражнения"],
         ["Координация", "согласованность моторики, равновесие", "шаг на сильную долю; смена направления"],
@@ -440,8 +481,7 @@ def build_pdf():
     )
 
     story.append(p("<b>2.4. Отличие ритмики, музыкально-двигательной деятельности, танца и хореографии (32–40 мин) — 8 мин</b>", styles["Time"]))
-    if (ASSETS / "scheme-concepts.png").exists():
-        story.append(RLImage(str(ASSETS / "scheme-concepts.png"), width=16.5 * cm, height=10.3 * cm))
+    story.append(RLImage(str(asset("scheme-concepts.png")), width=16.5 * cm, height=10.3 * cm))
     concepts = [
         ["Понятие", "Суть", "Цель в ДОУ"],
         ["Ритмика", "метод / система упражнений", "освоить музыку через движение"],
@@ -459,8 +499,7 @@ def build_pdf():
     story.append(p("<b>Приём «4 карточки»:</b> студенты сортируют примеры (ход под музыку; хоровод; постановка к утреннику; игра «Море волнуется») по четырём понятиям.", styles["Body"]))
 
     story.append(p("<b>2.5. Задачи музыкального руководителя и педагога (40–45 мин) — 5 мин</b>", styles["Time"]))
-    if (ASSETS / "scheme-roles.png").exists():
-        story.append(RLImage(str(ASSETS / "scheme-roles.png"), width=16.5 * cm, height=8.8 * cm))
+    story.append(RLImage(str(asset("scheme-roles.png")), width=16.5 * cm, height=8.8 * cm))
     story.append(p("<b>Музыкальный руководитель:</b> подбор музыки; формирование восприятия; развитие ритма; организация игр/танцев; качество и безопасность; консультация воспитателей.", styles["Body"]))
     story.append(p("<b>Воспитатель:</b> интерес в группе; закрепление материала; наблюдение за детьми; пространство и дисциплина; связь с речью/физкультурой; эмоциональный комфорт.", styles["Body"]))
     story.append(
@@ -490,9 +529,8 @@ def build_pdf():
             styles,
         )
     )
-    if (ASSETS / "slide-music-characters.jpg").exists():
-        story.append(Spacer(1, 2 * mm))
-        story.append(RLImage(str(ASSETS / "slide-music-characters.jpg"), width=16 * cm, height=9 * cm))
+    story.append(Spacer(1, 2 * mm))
+    story.append(RLImage(str(asset("slide-music-characters.jpg")), width=16 * cm, height=9 * cm))
 
     # Stage IV
     story.append(p("IV. Практический блок (55–85 мин) — 30 минут", styles["H2"]))
@@ -554,9 +592,8 @@ def build_pdf():
     ]
     story.append(make_table(reactions, [4 * cm, 7 * cm, 5.2 * cm], styles))
     story.append(p("<b>Критерии успеха:</b> своевременность реакции; соответствие характеру; внимание к сигналу; безопасность; возможность адаптации для 4–5 и 6–7 лет.", styles["Body"]))
-    if (ASSETS / "slide-children-rhythm.jpg").exists():
-        story.append(Spacer(1, 2 * mm))
-        story.append(RLImage(str(ASSETS / "slide-children-rhythm.jpg"), width=16 * cm, height=9 * cm))
+    story.append(Spacer(1, 2 * mm))
+    story.append(RLImage(str(asset("slide-children-rhythm.jpg")), width=16 * cm, height=9 * cm))
     story.append(PageBreak())
 
     # Stage V
@@ -638,7 +675,7 @@ def build_pdf():
     )
 
     doc.build(story, onFirstPage=add_page_number, onLaterPages=add_page_number)
-    print(f"PDF written: {OUT_PDF}")
+    print(f"PDF written: {output_path}")
 
 
 # -------------------- PPTX --------------------
@@ -701,11 +738,23 @@ def new_slide(prs):
 
 
 def add_image_fit(slide, path, left, top, width, height):
-    if Path(path).exists():
-        slide.shapes.add_picture(str(path), left, top, width=width, height=height)
+    """Place image inside a box while preserving aspect ratio."""
+    path = Path(path)
+    if not path.is_file():
+        raise FileNotFoundError(f"Отсутствует обязательный файл: {path}")
+    with PILImage.open(path) as im:
+        iw, ih = im.size
+    box_w = int(width)
+    box_h = int(height)
+    scale = min(box_w / iw, box_h / ih)
+    new_w = int(iw * scale)
+    new_h = int(ih * scale)
+    left_adj = int(left) + (box_w - new_w) // 2
+    top_adj = int(top) + (box_h - new_h) // 2
+    slide.shapes.add_picture(str(path), left_adj, top_adj, width=new_w, height=new_h)
 
 
-def build_pptx():
+def build_pptx(output_path: Path) -> None:
     prs = Presentation()
     prs.slide_width = Inches(13.333)
     prs.slide_height = Inches(7.5)
@@ -713,7 +762,7 @@ def build_pptx():
     # 1 Cover
     s = new_slide(prs)
     add_bg(s, 245, 240, 232)
-    add_image_fit(s, ASSETS / "slide-cover.jpg", Inches(0), Inches(0), Inches(13.333), Inches(7.5))
+    add_image_fit(s, asset("slide-cover.jpg"), Inches(0), Inches(0), Inches(13.333), Inches(7.5))
     overlay = s.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(0.6), Inches(1.6), Inches(12.1), Inches(4.3))
     overlay.fill.solid()
     overlay.fill.fore_color.rgb = RGBColor(255, 255, 255)
@@ -757,7 +806,7 @@ def build_pptx():
     s = new_slide(prs)
     add_bg(s, 245, 240, 232)
     add_title_bar(s, "Хронометраж: 90 минут")
-    add_image_fit(s, ASSETS / "scheme-timeline.png", Inches(0.4), Inches(1.25), Inches(12.5), Inches(5.9))
+    add_image_fit(s, asset("scheme-timeline.png"), Inches(0.4), Inches(1.25), Inches(12.5), Inches(5.9))
 
     # 4 Definition
     s = new_slide(prs)
@@ -798,13 +847,13 @@ def build_pptx():
     s = new_slide(prs)
     add_bg(s, 245, 240, 232)
     add_title_bar(s, "2. Связь музыки, движения, эмоций и интеллекта")
-    add_image_fit(s, ASSETS / "scheme-connection.png", Inches(0.35), Inches(1.3), Inches(12.6), Inches(5.5))
+    add_image_fit(s, asset("scheme-connection.png"), Inches(0.35), Inches(1.3), Inches(12.6), Inches(5.5))
 
     # 6 Why important + image
     s = new_slide(prs)
     add_bg(s, 245, 240, 232)
     add_title_bar(s, "Почему это важно дошкольнику")
-    add_image_fit(s, ASSETS / "slide-children-rhythm.jpg", Inches(0.4), Inches(1.3), Inches(7.2), Inches(5.5))
+    add_image_fit(s, asset("slide-children-rhythm.jpg"), Inches(0.4), Inches(1.3), Inches(7.2), Inches(5.5))
     box = s.shapes.add_textbox(Inches(7.9), Inches(1.5), Inches(4.9), Inches(5.3))
     add_bullets(
         box.text_frame,
@@ -822,19 +871,19 @@ def build_pptx():
     s = new_slide(prs)
     add_bg(s, 245, 240, 232)
     add_title_bar(s, "3. Роль ритма: координация, внимание, память, речь")
-    add_image_fit(s, ASSETS / "scheme-rhythm-roles.png", Inches(0.35), Inches(1.2), Inches(12.6), Inches(5.9))
+    add_image_fit(s, asset("scheme-rhythm-roles.png"), Inches(0.35), Inches(1.2), Inches(12.6), Inches(5.9))
 
     # 8 Four skills image
     s = new_slide(prs)
     add_bg(s, 245, 240, 232)
     add_title_bar(s, "Ритм на практике: четыре сферы развития")
-    add_image_fit(s, ASSETS / "slide-four-skills.jpg", Inches(0.8), Inches(1.3), Inches(11.7), Inches(5.6))
+    add_image_fit(s, asset("slide-four-skills.jpg"), Inches(0.8), Inches(1.3), Inches(11.7), Inches(5.6))
 
     # 9 Concepts
     s = new_slide(prs)
     add_bg(s, 245, 240, 232)
     add_title_bar(s, "4. Ритмика, деятельность, танец, хореография")
-    add_image_fit(s, ASSETS / "scheme-concepts.png", Inches(0.25), Inches(1.15), Inches(12.8), Inches(6.0))
+    add_image_fit(s, asset("scheme-concepts.png"), Inches(0.25), Inches(1.15), Inches(12.8), Inches(6.0))
 
     # 10 Error slide
     s = new_slide(prs)
@@ -868,13 +917,13 @@ def build_pptx():
     s = new_slide(prs)
     add_bg(s, 245, 240, 232)
     add_title_bar(s, "5. Задачи музыкального руководителя и воспитателя")
-    add_image_fit(s, ASSETS / "scheme-roles.png", Inches(0.35), Inches(1.2), Inches(12.6), Inches(5.7))
+    add_image_fit(s, asset("scheme-roles.png"), Inches(0.35), Inches(1.2), Inches(12.6), Inches(5.7))
 
     # 12 Teachers image
     s = new_slide(prs)
     add_bg(s, 245, 240, 232)
     add_title_bar(s, "Сотрудничество специалистов")
-    add_image_fit(s, ASSETS / "slide-teachers-roles.jpg", Inches(0.4), Inches(1.3), Inches(7.3), Inches(5.5))
+    add_image_fit(s, asset("slide-teachers-roles.jpg"), Inches(0.4), Inches(1.3), Inches(7.3), Inches(5.5))
     box = s.shapes.add_textbox(Inches(8), Inches(1.6), Inches(4.8), Inches(5.2))
     add_bullets(
         box.text_frame,
@@ -891,7 +940,7 @@ def build_pptx():
     s = new_slide(prs)
     add_bg(s, 245, 240, 232)
     add_title_bar(s, "Практика со студентами")
-    add_image_fit(s, ASSETS / "slide-music-characters.jpg", Inches(0.4), Inches(1.3), Inches(7.3), Inches(5.5))
+    add_image_fit(s, asset("slide-music-characters.jpg"), Inches(0.4), Inches(1.3), Inches(7.3), Inches(5.5))
     box = s.shapes.add_textbox(Inches(8), Inches(1.6), Inches(4.8), Inches(5.2))
     add_bullets(
         box.text_frame,
@@ -1012,7 +1061,7 @@ def build_pptx():
     # 18 Final
     s = new_slide(prs)
     add_bg(s, 245, 240, 232)
-    add_image_fit(s, ASSETS / "slide-cover.jpg", Inches(0), Inches(0), Inches(13.333), Inches(7.5))
+    add_image_fit(s, asset("slide-cover.jpg"), Inches(0), Inches(0), Inches(13.333), Inches(7.5))
     card = s.shapes.add_shape(MSO_SHAPE.ROUNDED_RECTANGLE, Inches(1.5), Inches(2.1), Inches(10.3), Inches(3.4))
     card.fill.solid()
     card.fill.fore_color.rgb = PPT_WHITE
@@ -1031,10 +1080,22 @@ def build_pptx():
     run2.text = "Воспитатель замечает, закрепляет и продолжает музыкальный опыт"
     set_run(run2, 20, False, PPT_INK)
 
-    prs.save(str(OUT_PPTX))
-    print(f"PPTX written: {OUT_PPTX}")
+    prs.save(str(output_path))
+    print(f"PPTX written: {output_path}")
+
+
+def publish_pair() -> None:
+    require_assets()
+    with tempfile.TemporaryDirectory(prefix="lesson1-build-") as tmp:
+        tmpdir = Path(tmp)
+        pdf_tmp = tmpdir / OUT_PDF.name
+        pptx_tmp = tmpdir / OUT_PPTX.name
+        build_pdf(pdf_tmp)
+        build_pptx(pptx_tmp)
+        os.replace(pdf_tmp, OUT_PDF)
+        os.replace(pptx_tmp, OUT_PPTX)
+    print(f"Published:\n  - {OUT_PDF}\n  - {OUT_PPTX}")
 
 
 if __name__ == "__main__":
-    build_pdf()
-    build_pptx()
+    publish_pair()

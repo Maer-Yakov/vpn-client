@@ -2,10 +2,14 @@
 """Generate educational diagrams for lesson 1."""
 
 from pathlib import Path
+
 from PIL import Image, ImageDraw, ImageFont
+
+from font_paths import resolve_fonts
 
 OUT = Path(__file__).resolve().parent / "assets"
 OUT.mkdir(parents=True, exist_ok=True)
+FONTS = resolve_fonts()
 
 TEAL = (28, 110, 120)
 TEAL_LIGHT = (214, 236, 238)
@@ -19,12 +23,8 @@ GOLD = (196, 155, 78)
 
 
 def font(size: int, bold: bool = False):
-    path = (
-        "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
-        if bold
-        else "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"
-    )
-    return ImageFont.truetype(path, size)
+    path = FONTS["bold"] if bold else FONTS["regular"]
+    return ImageFont.truetype(str(path), size)
 
 
 def rounded_rect(draw, xy, radius, fill, outline=None, width=2):

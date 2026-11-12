@@ -22,7 +22,26 @@
 
 ## Пересборка
 
+### Зависимости
+
+```bash
+python3 -m pip install pillow reportlab python-pptx
+```
+
+Нужны шрифты с кириллицей (предпочтительно DejaVu):
+
+```bash
+# Debian / Ubuntu
+sudo apt install fonts-dejavu
+```
+
+Скрипты ищут DejaVu, Liberation Sans или Noto Sans в стандартных путях Linux/macOS.
+
+### Команды
+
 ```bash
 python3 generate_diagrams.py
 python3 generate_materials.py
 ```
+
+`generate_materials.py` сначала проверяет наличие всех картинок в `assets/`, собирает PDF и PPTX во временные файлы и публикует пару только если обе сборки прошли успешно.

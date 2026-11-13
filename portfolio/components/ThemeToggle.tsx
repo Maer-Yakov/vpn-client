@@ -5,10 +5,23 @@ import { useEffect, useState } from "react";
 
 type Theme = "dark" | "light";
 
-function applyTheme(theme: Theme) {
+const themeKey = "theme";
+
+function themeFromValue(value: string | null): Theme {
+  return value === "light" ? "light" : "dark";
+}
+
+function applyDocumentTheme(theme: Theme) {
   document.documentElement.classList.toggle("dark", theme === "dark");
   document.documentElement.style.colorScheme = theme;
-  localStorage.setItem("theme", theme);
+}
+
+function persistTheme(theme: Theme) {
+  try {
+    localStorage.setItem(themeKey, theme);
+  } catch {
+    // Приватный режим или запрет на storage не должны ломать переключатель.
+  }
 }
 
 export function ThemeToggle() {
@@ -16,12 +29,23 @@ export function ThemeToggle() {
 
   useEffect(() => {
     setTheme(document.documentElement.classList.contains("dark") ? "dark" : "light");
+
+    function onStorage(event: StorageEvent) {
+      if (event.key !== themeKey) return;
+      const next = themeFromValue(event.newValue);
+      applyDocumentTheme(next);
+      setTheme(next);
+    }
+
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
   }, []);
 
   function toggle() {
     const next: Theme = theme === "dark" ? "light" : "dark";
     setTheme(next);
-    applyTheme(next);
+    applyDocumentTheme(next);
+    persistTheme(next);
   }
 
   const isDark = theme === "dark";

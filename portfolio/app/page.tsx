@@ -1,11 +1,11 @@
 import Link from "next/link";
 import { ProjectCard } from "@/components/ProjectCard";
 import { projects } from "@/data/projects";
-import { site } from "@/data/site";
+import { site, siteTitle } from "@/data/site";
 import { pageMeta } from "@/lib/seo";
 
 export const metadata = pageMeta({
-  title: site.title,
+  title: siteTitle,
   description: site.description,
   path: "/",
   absoluteTitle: true,

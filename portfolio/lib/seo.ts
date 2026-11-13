@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { site } from "@/data/site";
+import { configuredSiteUrl } from "@/lib/site-url";
 
 type PageMetaInput = {
   title: string;
@@ -11,15 +12,16 @@ type PageMetaInput = {
 
 export function pageMeta(input: PageMetaInput): Metadata {
   const shareTitle = input.absoluteTitle ? input.title : `${input.title} — ${site.name}`;
+  const hasPublicUrl = configuredSiteUrl() !== undefined;
 
   return {
     title: input.absoluteTitle ? { absolute: input.title } : input.title,
     description: input.description,
-    alternates: { canonical: input.path },
+    ...(hasPublicUrl ? { alternates: { canonical: input.path } } : {}),
     openGraph: {
       title: shareTitle,
       description: input.description,
-      url: input.path,
+      ...(hasPublicUrl ? { url: input.path } : {}),
       siteName: site.name,
       locale: "ru_RU",
       type: input.type ?? "website",

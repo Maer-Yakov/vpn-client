@@ -35,6 +35,7 @@ export default function ProjectPage({ params }: ProjectPageProps) {
     notFound();
   }
 
+  const showLink = project.link !== "" && project.link !== "#";
   const external = project.link.startsWith("http");
 
   return (
@@ -73,15 +74,17 @@ export default function ProjectPage({ params }: ProjectPageProps) {
         </section>
       </div>
 
-      {/* COPY: адрес кнопки — поле link в data/projects.ts */}
-      <a
-        href={project.link}
-        className="btn-primary mt-10"
-        {...(external ? { target: "_blank", rel: "noreferrer" } : {})}
-      >
-        Открыть проект
-        <ArrowUpRight size={16} aria-hidden />
-      </a>
+      {/* COPY: адрес кнопки — поле link в data/projects.ts. "#" и пустая строка кнопку не показывают. */}
+      {showLink ? (
+        <a
+          href={project.link}
+          className="btn-primary mt-10"
+          {...(external ? { target: "_blank", rel: "noreferrer" } : {})}
+        >
+          Открыть проект
+          <ArrowUpRight size={16} aria-hidden />
+        </a>
+      ) : null}
     </article>
   );
 }

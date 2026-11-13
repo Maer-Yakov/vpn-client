@@ -1,22 +1,25 @@
 import type { Metadata } from "next";
-import { Inter } from "next/font/google";
+import localFont from "next/font/local";
 import { Footer } from "@/components/Footer";
 import { Header } from "@/components/Header";
-import { site } from "@/data/site";
+import { site, siteTitle } from "@/data/site";
+import { configuredSiteUrl } from "@/lib/site-url";
 import { themeInitScript } from "@/lib/theme-script";
 import "./globals.css";
 
-const inter = Inter({
-  subsets: ["latin", "cyrillic"],
+// Файл в репозитории: сборка не скачивает шрифт с fonts.google.com.
+const inter = localFont({
+  src: "../fonts/Inter-latin-cyrillic.woff2",
   display: "swap",
+  weight: "100 900",
 });
 
-const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
+const metadataBase = configuredSiteUrl();
 
 export const metadata: Metadata = {
-  metadataBase: new URL(siteUrl),
+  ...(metadataBase ? { metadataBase } : {}),
   title: {
-    default: site.title,
+    default: siteTitle,
     template: `%s — ${site.name}`,
   },
   description: site.description,
@@ -24,12 +27,12 @@ export const metadata: Metadata = {
     type: "website",
     locale: "ru_RU",
     siteName: site.name,
-    title: site.title,
+    title: siteTitle,
     description: site.description,
   },
   twitter: {
     card: "summary",
-    title: site.title,
+    title: siteTitle,
     description: site.description,
   },
 };

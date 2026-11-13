@@ -30,6 +30,7 @@ export type LandingPreview = {
   title: string;
   price: string;
   fields: string[];
+  works: string[];
 };
 
 export type SchedulePreview = {
@@ -43,6 +44,7 @@ export type EstimatePreview = {
   kind: "estimate";
   stat: string;
   accuracy: string;
+  total: string;
   blocks: { title: string; hours: string }[];
 };
 
@@ -144,6 +146,7 @@ export const projects: Project[] = [
       title: "Запись без переписки",
       price: "4 500 ₽",
       fields: ["Имя", "Услуга", "Удобный день"],
+      works: ["Чашка", "Ваза", "Тарелка"],
     },
   },
   {
@@ -185,6 +188,7 @@ export const projects: Project[] = [
       kind: "estimate",
       stat: "20 мин",
       accuracy: "±15%",
+      total: "86 000 ₽",
       blocks: [
         { title: "Дизайн", hours: "6 ч" },
         { title: "Вёрстка", hours: "10 ч" },

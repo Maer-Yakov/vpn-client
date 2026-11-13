@@ -21,8 +21,7 @@ const skills = ["Формулировка боли", "Интерфейсы", "П
 /* COPY: стек */
 const stackGroups = [
   { label: "Интерфейс", items: ["Next.js", "React", "TypeScript", "Tailwind CSS"] },
-  { label: "Сервер и данные", items: ["Node.js", "Supabase"] },
-  { label: "Оплата", items: ["Stripe"] },
+  { label: "Сервер и данные", items: ["Node.js", "Postgres"] },
 ];
 
 const contacts = [
@@ -59,7 +58,7 @@ export default function AboutPage() {
 
       <section className="rise" style={{ animationDelay: "140ms" }}>
         <h2 className="text-2xl font-semibold tracking-tight">Стек</h2>
-        <dl className="mt-5 grid gap-6 sm:grid-cols-3">
+        <dl className="mt-5 grid gap-6 sm:grid-cols-2">
           {stackGroups.map((group) => (
             <div key={group.label}>
               <dt className="text-sm font-medium text-[var(--muted)]">{group.label}</dt>

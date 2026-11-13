@@ -15,7 +15,7 @@ export default function PortfolioPage() {
         <h1 className="text-4xl font-semibold tracking-tight sm:text-5xl">Портфолио</h1>
         {/* COPY: вступление к списку работ */}
         <p className="mt-4 text-base leading-relaxed text-[var(--muted)] sm:text-lg">
-          Три работы в одном списке. Оставьте нужный тип — SaaS, сайт или инструмент.
+          Шесть работ. Оставьте нужный тип — SaaS, сайт или инструмент.
         </p>
       </header>
       <div className="mt-10">

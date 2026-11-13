@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { ProjectCard } from "@/components/ProjectCard";
-import { projects } from "@/data/projects";
+import { featuredProjects } from "@/data/projects";
 import { site, siteTitle } from "@/data/site";
 import { pageMeta } from "@/lib/seo";
 
@@ -13,18 +13,19 @@ export const metadata = pageMeta({
 
 export default function HomePage() {
   return (
-    <div className="space-y-20">
+    <div className="space-y-16">
       <section className="rise">
         <div className="mb-6 h-px w-12 bg-accent" />
-        <p className="text-sm font-medium text-accent">Портфолио</p>
+        {/* COPY: кому предназначено предложение */}
+        <p className="text-sm font-medium text-accent">Для фрилансеров и частных практик</p>
         {/* COPY: заголовок на главной */}
-        <h1 className="mt-3 max-w-3xl text-4xl font-semibold tracking-tight sm:text-6xl sm:leading-[1.05]">
-          Продукты, которые убирают ручную работу
+        <h1 className="mt-3 max-w-3xl text-4xl font-semibold tracking-tight sm:text-5xl sm:leading-[1.08]">
+          Соберу сервис, инструмент или сайт под одну конкретную боль
         </h1>
-        {/* COPY: короткое интро */}
+        {/* COPY: что получает клиент */}
         <p className="mt-5 max-w-2xl text-base leading-relaxed text-[var(--muted)] sm:text-lg">
-          Делаю небольшие SaaS, сайты и инструменты для тех, кто работает один.
-          Ниже — три кейса: какая была боль и что изменилось.
+          На выходе рабочая вещь, а не макет: меньше ручной работы или страница, которую можно
+          отправить клиенту в тот же день. В каждом кейсе есть цифра, по которой видно результат.
         </p>
         <div className="mt-8 flex flex-col gap-3 sm:flex-row">
           <Link href="/about#contact" className="btn-primary">
@@ -43,9 +44,9 @@ export default function HomePage() {
             Все проекты
           </Link>
         </div>
-        {/* COPY: избранные. Сейчас показаны все записи из data/projects.ts */}
+        {/* COPY: избранные — проекты с featured: true в data/projects.ts */}
         <ul className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {projects.map((project, index) => (
+          {featuredProjects().map((project, index) => (
             <li
               key={project.slug}
               className="rise"

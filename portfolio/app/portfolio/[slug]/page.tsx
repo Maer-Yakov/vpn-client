@@ -52,11 +52,17 @@ export default function ProjectPage({ params }: ProjectPageProps) {
         {project.type}
       </p>
       <h1 className="mt-4 text-4xl font-semibold tracking-tight sm:text-5xl">{project.name}</h1>
+      <p className="mt-4 text-lg leading-relaxed">{project.offer}</p>
+      <p className="mt-2 text-sm leading-relaxed text-[var(--muted)]">{project.audience}</p>
 
       <div className="mt-10 space-y-8">
         <section>
-          <h2 className="text-sm font-medium uppercase tracking-wide text-[var(--muted)]">Боль</h2>
+          <h2 className="text-sm font-medium uppercase tracking-wide text-[var(--muted)]">Задача</h2>
           <p className="mt-2 text-lg leading-relaxed">{project.pain}</p>
+        </section>
+        <section>
+          <h2 className="text-sm font-medium uppercase tracking-wide text-[var(--muted)]">Что сделано</h2>
+          <p className="mt-2 text-lg leading-relaxed">{project.built}</p>
         </section>
         <section>
           <h2 className="text-sm font-medium uppercase tracking-wide text-[var(--muted)]">Результат</h2>

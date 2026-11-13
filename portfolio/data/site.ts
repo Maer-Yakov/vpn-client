@@ -6,7 +6,7 @@
 export const site = {
   name: "Моё имя",
   description:
-    "Небольшие SaaS, сайты и инструменты для фрилансеров. Три кейса: от боли клиента к результату.",
+    "Сервисы, инструменты и сайты для фрилансеров и частных практик. В кейсах — кому это нужно, что сделано и цифра результата.",
   email: "hello@example.com",
   github: "https://github.com/username",
   telegram: "https://t.me/username",

@@ -227,3 +227,8 @@ export function getProject(slug: string): Project | undefined {
 export function featuredProjects(): Project[] {
   return projects.filter((project) => project.featured);
 }
+
+/** COPY: остальные работы — блок под избранными на главной. */
+export function otherProjects(): Project[] {
+  return projects.filter((project) => !project.featured);
+}

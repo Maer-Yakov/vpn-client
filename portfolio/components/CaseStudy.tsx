@@ -2,7 +2,7 @@ import { ArrowLeft, ArrowUpRight } from "lucide-react";
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { CaseMock } from "@/components/CaseMock";
-import type { Project } from "@/data/projects";
+import { projects, type Project } from "@/data/projects";
 
 export function CaseStudy({ project }: { project: Project }) {
   switch (project.preview.kind) {
@@ -33,6 +33,33 @@ function BackLink() {
     >
       <ArrowLeft size={16} aria-hidden />
       Все проекты
+    </Link>
+  );
+}
+
+function CaseNeighbors({ project }: { project: Project }) {
+  const index = projects.findIndex((item) => item.slug === project.slug);
+  if (index < 0) return null;
+  const previous = projects[(index - 1 + projects.length) % projects.length];
+  const next = projects[(index + 1) % projects.length];
+
+  return (
+    <nav aria-label="Другие работы" className="mt-12 grid gap-3 sm:grid-cols-2">
+      <NeighborLink label="Предыдущая" project={previous} />
+      <NeighborLink label="Следующая" project={next} />
+    </nav>
+  );
+}
+
+function NeighborLink({ label, project }: { label: string; project: Project }) {
+  return (
+    <Link
+      href={`/portfolio/${project.slug}`}
+      className="rounded-xl border border-[var(--line)] p-4 transition duration-300 hover:border-accent"
+    >
+      <p className="text-xs text-[var(--muted)]">{label}</p>
+      <p className="mt-1 font-medium">{project.name}</p>
+      <p className="mt-1 text-sm text-[var(--muted)]">{project.preview.stat}</p>
     </Link>
   );
 }
@@ -115,6 +142,7 @@ function InboxCase({ project }: { project: Project }) {
         <StackRow stack={project.stack} />
       </div>
       <OpenProject project={project} />
+      <CaseNeighbors project={project} />
       <HireClose />
     </article>
   );
@@ -137,6 +165,7 @@ function InvoiceCase({ project }: { project: Project }) {
           <StackRow stack={project.stack} />
         </div>
         <OpenProject project={project} />
+      <CaseNeighbors project={project} />
       <HireClose />
       </div>
     </article>
@@ -163,6 +192,7 @@ function LandingCase({ project }: { project: Project }) {
         <StackRow stack={project.stack} />
       </div>
       <OpenProject project={project} />
+      <CaseNeighbors project={project} />
       <HireClose />
     </article>
   );
@@ -194,6 +224,7 @@ function ScheduleCase({ project }: { project: Project }) {
         <StackRow stack={project.stack} />
       </div>
       <OpenProject project={project} />
+      <CaseNeighbors project={project} />
       <HireClose />
     </article>
   );
@@ -218,6 +249,7 @@ function EstimateCase({ project }: { project: Project }) {
         <StackRow stack={project.stack} />
       </div>
       <OpenProject project={project} />
+      <CaseNeighbors project={project} />
       <HireClose />
     </article>
   );
@@ -243,6 +275,7 @@ function ShowcaseCase({ project }: { project: Project }) {
         <StackRow stack={project.stack} />
       </div>
       <OpenProject project={project} />
+      <CaseNeighbors project={project} />
       <HireClose />
     </article>
   );

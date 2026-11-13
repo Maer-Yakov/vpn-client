@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { ProjectCard } from "@/components/ProjectCard";
-import { featuredProjects } from "@/data/projects";
+import { featuredProjects, otherProjects } from "@/data/projects";
 import { site, siteTitle } from "@/data/site";
 import { pageMeta } from "@/lib/seo";
 
@@ -53,6 +53,25 @@ export default function HomePage() {
               style={{ animationDelay: `${140 + index * 90}ms` }}
             >
               <ProjectCard project={project} />
+            </li>
+          ))}
+        </ul>
+      </section>
+
+      <section className="rise">
+        <h2 className="text-2xl font-semibold tracking-tight">Ещё работы</h2>
+        {/* COPY: остальные — проекты без featured в data/projects.ts */}
+        <ul className="mt-4 divide-y divide-[var(--line)] border-y border-[var(--line)]">
+          {otherProjects().map((project) => (
+            <li key={project.slug}>
+              <Link
+                href={`/portfolio/${project.slug}`}
+                className="flex flex-col gap-1 py-4 transition duration-300 hover:text-accent sm:flex-row sm:items-baseline sm:justify-between sm:gap-6"
+              >
+                <span className="font-medium">{project.name}</span>
+                <span className="text-sm text-[var(--muted)] sm:ml-auto">{project.type}</span>
+                <span className="text-sm sm:w-28 sm:text-right">{project.preview.stat}</span>
+              </Link>
             </li>
           ))}
         </ul>

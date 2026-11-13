@@ -4,8 +4,61 @@
  * type: "SaaS" | "Сайт" | "Инструмент".
  * featured: true — работа попадает в блок на главной. Оставьте три сильных.
  * link: адрес проекта. "#" и пустая строка скрывают кнопку «Открыть проект».
+ * preview — тексты макета на карточке и на странице кейса. Это рисунок интерфейса, не чужой скриншот.
  */
 export type ProjectType = "SaaS" | "Сайт" | "Инструмент";
+
+export type InboxPreview = {
+  kind: "inbox";
+  stat: string;
+  before: string;
+  messages: { from: string; text: string; kept: boolean }[];
+};
+
+export type InvoicePreview = {
+  kind: "invoice";
+  stat: string;
+  number: string;
+  client: string;
+  lines: { title: string; amount: string }[];
+  total: string;
+};
+
+export type LandingPreview = {
+  kind: "landing";
+  stat: string;
+  title: string;
+  price: string;
+  fields: string[];
+};
+
+export type SchedulePreview = {
+  kind: "schedule";
+  stat: string;
+  reminder: string;
+  columns: { day: string; items: { label: string; tone: "a" | "b" | "c" }[] }[];
+};
+
+export type EstimatePreview = {
+  kind: "estimate";
+  stat: string;
+  accuracy: string;
+  blocks: { title: string; hours: string }[];
+};
+
+export type ShowcasePreview = {
+  kind: "showcase";
+  stat: string;
+  tiles: { index: string; title: string }[];
+};
+
+export type ProjectPreview =
+  | InboxPreview
+  | InvoicePreview
+  | LandingPreview
+  | SchedulePreview
+  | EstimatePreview
+  | ShowcasePreview;
 
 export type Project = {
   slug: string;
@@ -19,6 +72,7 @@ export type Project = {
   stack: string[];
   link: string;
   featured?: boolean;
+  preview: ProjectPreview;
 };
 
 export const projectTypes: ProjectType[] = ["SaaS", "Сайт", "Инструмент"];
@@ -36,6 +90,17 @@ export const projects: Project[] = [
     stack: ["Next.js", "TypeScript", "Postgres"],
     link: "#",
     featured: true,
+    preview: {
+      kind: "inbox",
+      stat: "40 мин",
+      before: "5 часов",
+      messages: [
+        { from: "Анна", text: "Правки по главной", kept: true },
+        { from: "Рассылка", text: "Скидка только сегодня", kept: false },
+        { from: "Игорь", text: "Счёт получил, спасибо", kept: true },
+        { from: "Дайджест", text: "24 письма за ночь", kept: false },
+      ],
+    },
   },
   {
     slug: "schet-v-srok",
@@ -49,6 +114,17 @@ export const projects: Project[] = [
     stack: ["React", "TypeScript", "Node.js"],
     link: "#",
     featured: true,
+    preview: {
+      kind: "invoice",
+      stat: "1 день",
+      number: "18",
+      client: "Студия на двоих",
+      lines: [
+        { title: "Главный экран", amount: "12 000 ₽" },
+        { title: "Карточки услуг", amount: "8 000 ₽" },
+      ],
+      total: "20 000 ₽",
+    },
   },
   {
     slug: "odna-stranica",
@@ -62,6 +138,13 @@ export const projects: Project[] = [
     stack: ["Next.js", "Tailwind"],
     link: "#",
     featured: true,
+    preview: {
+      kind: "landing",
+      stat: "9 из 10",
+      title: "Запись без переписки",
+      price: "4 500 ₽",
+      fields: ["Имя", "Услуга", "Удобный день"],
+    },
   },
   {
     slug: "slot",
@@ -74,6 +157,18 @@ export const projects: Project[] = [
     offer: "Расписание, которое само напоминает об уроке",
     stack: ["Next.js", "TypeScript", "Postgres"],
     link: "#",
+    preview: {
+      kind: "schedule",
+      stat: "8 → 3",
+      reminder: "Напоминание за 3 часа",
+      columns: [
+        { day: "Пн", items: [{ label: "Алгебра", tone: "a" }, { label: "Оплачен", tone: "a" }] },
+        { day: "Вт", items: [{ label: "Английский", tone: "b" }] },
+        { day: "Ср", items: [{ label: "Физика", tone: "c" }, { label: "Алгебра", tone: "a" }] },
+        { day: "Чт", items: [{ label: "Эссе", tone: "b" }] },
+        { day: "Пт", items: [{ label: "Разбор", tone: "c" }] },
+      ],
+    },
   },
   {
     slug: "smeta-blokami",
@@ -86,6 +181,16 @@ export const projects: Project[] = [
     offer: "Смета, которую клиент понимает без созвона",
     stack: ["React", "TypeScript"],
     link: "#",
+    preview: {
+      kind: "estimate",
+      stat: "20 мин",
+      accuracy: "±15%",
+      blocks: [
+        { title: "Дизайн", hours: "6 ч" },
+        { title: "Вёрстка", hours: "10 ч" },
+        { title: "Правки", hours: "3 ч" },
+      ],
+    },
   },
   {
     slug: "vitrina-kejsov",
@@ -98,6 +203,15 @@ export const projects: Project[] = [
     offer: "Ссылка с кейсами, которую можно отправить в тот же вечер",
     stack: ["Next.js", "Tailwind"],
     link: "#",
+    preview: {
+      kind: "showcase",
+      stat: "4-й день",
+      tiles: [
+        { index: "01", title: "Запуск услуги" },
+        { index: "02", title: "Сервис записи" },
+        { index: "03", title: "Страница с ценой" },
+      ],
+    },
   },
 ];
 

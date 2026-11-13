@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { CaseMock } from "@/components/CaseMock";
 import { ProjectCard } from "@/components/ProjectCard";
 import { featuredProjects, otherProjects } from "@/data/projects";
 import { site, siteTitle } from "@/data/site";
@@ -61,20 +62,33 @@ export default function HomePage() {
       <section className="rise">
         <h2 className="text-2xl font-semibold tracking-tight">Ещё работы</h2>
         {/* COPY: остальные — проекты без featured в data/projects.ts */}
-        <ul className="mt-4 divide-y divide-[var(--line)] border-y border-[var(--line)]">
+        <ul className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-3">
           {otherProjects().map((project) => (
             <li key={project.slug}>
               <Link
                 href={`/portfolio/${project.slug}`}
-                className="flex flex-col gap-1 py-4 transition duration-300 hover:text-accent sm:flex-row sm:items-baseline sm:justify-between sm:gap-6"
+                className="block overflow-hidden rounded-xl border border-[var(--line)] bg-[var(--card)] transition duration-300 hover:-translate-y-1 hover:border-accent motion-reduce:transform-none"
               >
-                <span className="font-medium">{project.name}</span>
-                <span className="text-sm text-[var(--muted)] sm:ml-auto">{project.type}</span>
-                <span className="text-sm sm:w-28 sm:text-right">{project.preview.stat}</span>
+                <CaseMock project={project} size="thumb" />
+                <div className="p-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <span className="font-medium">{project.name}</span>
+                    <span className="text-xs text-[var(--muted)]">{project.type}</span>
+                  </div>
+                  <p className="mt-2 text-sm text-[var(--muted)]">{project.preview.stat}</p>
+                </div>
               </Link>
             </li>
           ))}
         </ul>
+        <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <p className="max-w-md text-sm leading-relaxed text-[var(--muted)]">
+            Если одна из работ похожа на вашу задачу — напишите, кому это нужно.
+          </p>
+          <Link href="/about#contact" className="btn-primary shrink-0">
+            Связаться
+          </Link>
+        </div>
       </section>
     </div>
   );

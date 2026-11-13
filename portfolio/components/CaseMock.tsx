@@ -8,9 +8,10 @@ import type {
   ShowcasePreview,
 } from "@/data/projects";
 
-type MockSize = "card" | "page";
+type MockSize = "thumb" | "card" | "page";
 
 const frame = {
+  thumb: "h-[88px] overflow-hidden",
   card: "h-[188px] overflow-hidden",
   page: "overflow-hidden rounded-2xl border border-black/10 shadow-[0_24px_50px_-32px_rgba(0,0,0,0.45)] dark:border-white/10",
 } as const;
@@ -38,7 +39,7 @@ export function CaseMock({ project, size }: { project: Project; size: MockSize }
 }
 
 function InboxMock({ preview, size }: { preview: InboxPreview; size: MockSize }) {
-  const compact = size === "card";
+  const compact = size !== "page";
   const kept = preview.messages.filter((message) => message.kept).length;
   const dropped = preview.messages.length - kept;
 
@@ -99,7 +100,7 @@ function InboxMock({ preview, size }: { preview: InboxPreview; size: MockSize })
 }
 
 function InvoiceMock({ preview, size }: { preview: InvoicePreview; size: MockSize }) {
-  const compact = size === "card";
+  const compact = size !== "page";
   const steps = ["Сдано", "Счёт", "Оплачен"];
 
   return (
@@ -153,7 +154,7 @@ function InvoiceMock({ preview, size }: { preview: InvoicePreview; size: MockSiz
 const workSwatch = ["bg-rose-300", "bg-amber-200", "bg-stone-300"];
 
 function LandingMock({ preview, size }: { preview: LandingPreview; size: MockSize }) {
-  const compact = size === "card";
+  const compact = size !== "page";
 
   return (
     <div aria-hidden className={`${frame[size]} bg-[#4a2030] text-white`}>
@@ -209,7 +210,7 @@ const lessonTone = {
 } as const;
 
 function ScheduleMock({ preview, size }: { preview: SchedulePreview; size: MockSize }) {
-  const compact = size === "card";
+  const compact = size !== "page";
   const rows = compact ? 1 : 2;
 
   return (
@@ -266,7 +267,7 @@ function barWidth(hours: string) {
 }
 
 function EstimateMock({ preview, size }: { preview: EstimatePreview; size: MockSize }) {
-  const compact = size === "card";
+  const compact = size !== "page";
 
   return (
     <div aria-hidden className={`${frame[size]} bg-neutral-950 text-white`}>
@@ -304,7 +305,7 @@ function EstimateMock({ preview, size }: { preview: EstimatePreview; size: MockS
 }
 
 function ShowcaseMock({ preview, size }: { preview: ShowcasePreview; size: MockSize }) {
-  const compact = size === "card";
+  const compact = size !== "page";
   const [lead, ...rest] = preview.tiles;
 
   return (

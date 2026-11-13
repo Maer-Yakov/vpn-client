@@ -55,11 +55,14 @@ function NeighborLink({ label, project }: { label: string; project: Project }) {
   return (
     <Link
       href={`/portfolio/${project.slug}`}
-      className="rounded-xl border border-[var(--line)] p-4 transition duration-300 hover:border-accent"
+      className="overflow-hidden rounded-xl border border-[var(--line)] transition duration-300 hover:border-accent"
     >
-      <p className="text-xs text-[var(--muted)]">{label}</p>
-      <p className="mt-1 font-medium">{project.name}</p>
-      <p className="mt-1 text-sm text-[var(--muted)]">{project.preview.stat}</p>
+      <CaseMock project={project} size="thumb" />
+      <div className="p-4">
+        <p className="text-xs text-[var(--muted)]">{label}</p>
+        <p className="mt-1 font-medium">{project.name}</p>
+        <p className="mt-1 text-sm text-[var(--muted)]">{project.preview.stat}</p>
+      </div>
     </Link>
   );
 }

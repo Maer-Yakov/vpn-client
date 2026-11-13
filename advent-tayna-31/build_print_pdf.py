@@ -57,7 +57,9 @@ def letters() -> list[Path]:
 def build() -> None:
     temps: list[Path] = []
     try:
-        map_src = CARDS / "map-gorod-tihih-fonarey.jpg"
+        map_src = CARDS / "map-advent.jpg"
+        if not map_src.exists():
+            map_src = CARDS / "map-gorod-tihih-fonarey.jpg"
         map_page = save_temp(fit_on_canvas(map_src, A4_LAND, margin_ratio=0.02), "_map.jpg")
         temps.append(map_page)
 

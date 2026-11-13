@@ -17,7 +17,7 @@ except ImportError as exc:  # pragma: no cover
 ROOT = Path(__file__).resolve().parent
 ASSETS = Path(os.environ.get("TAYNA31_ASSETS", ROOT / "assets"))
 SRC = ASSETS / "map-gorod-tihih-fonarey-folk.jpg"
-OUT = ROOT / "cards" / "map-gorod-tihih-fonarey.jpg"
+OUT = ROOT / "cards" / "map-advent.jpg"
 
 FONT_CANDIDATES = {
     "title": [
@@ -32,23 +32,17 @@ FONT_CANDIDATES = {
     ],
 }
 
-# Approximate positions as fractions of width/height on the generated map.
 LABELS = [
-    (0.50, 0.08, "Город Тихих Фонарей", 42, True),
-    (0.48, 0.36, "Городская башня", 24, False),
-    (0.28, 0.30, "Мастерская Луми", 20, False),
-    (0.70, 0.34, "Мастерская фонарей", 20, False),
-    (0.18, 0.48, "Улица Тихих\nКолокольчиков", 18, False),
-    (0.82, 0.55, "Почта Снежка", 20, False),
-    (0.58, 0.62, "Река Тишины", 20, False),
-    (0.48, 0.78, "Ёлочная площадь", 20, False),
-    (0.18, 0.72, "Лес забытых чудес", 20, False),
-    (0.82, 0.78, "Библиотека\nвоспоминаний", 18, False),
-    (0.30, 0.88, "Дом семьи", 20, False),
-    (0.58, 0.48, "Площадь теней", 20, False),
-    (0.78, 0.88, "Северный холм", 20, False),
-    (0.18, 0.28, "Последняя башня", 20, False),
-    (0.50, 0.94, "Огоньки 1–31 · семь тайных символов", 17, False),
+    (0.50, 0.07, "Тайна 31-го огонька", 40, True),
+    (0.50, 0.13, "Карта сказочных огоньков", 22, False),
+    (0.22, 0.30, "Деревня сказок", 20, False),
+    (0.48, 0.34, "Теремок", 20, False),
+    (0.72, 0.30, "Лес чудес", 20, False),
+    (0.30, 0.55, "Река", 18, False),
+    (0.55, 0.58, "Зимовье", 18, False),
+    (0.78, 0.55, "Дворец", 18, False),
+    (0.50, 0.78, "Площадь огоньков", 20, False),
+    (0.50, 0.93, "31 огонёк · Дедушка Мороз и Искорка", 17, False),
 ]
 
 
@@ -75,20 +69,17 @@ def atomic_save_jpeg(im: Image.Image, dest: Path, quality: int = 92) -> None:
 
 def main() -> None:
     if not SRC.exists():
-        raise SystemExit(
-            f"Map source not found: {SRC}\n"
-            "Expected bundled artwork under advent-tayna-31/assets/, "
-            "or set TAYNA31_ASSETS."
-        )
-
+        raise SystemExit(f"Map source not found: {SRC}")
     im = Image.open(SRC).convert("RGBA")
     W, H = im.size
     overlay = Image.new("RGBA", im.size, (0, 0, 0, 0))
     draw = ImageDraw.Draw(overlay)
 
     for x_f, y_f, text, size, is_title in LABELS:
-        font_path = resolve_font("title" if is_title else "ui")
-        font = ImageFont.truetype(font_path, size=max(14, int(W * size / 1400)))
+        font = ImageFont.truetype(
+            resolve_font("title" if is_title else "ui"),
+            size=max(14, int(W * size / 1400)),
+        )
         x, y = int(W * x_f), int(H * y_f)
         lines = text.split("\n")
         line_h = int(font.size * 1.2)
@@ -102,7 +93,7 @@ def main() -> None:
             int(y + total_h / 2 + pad / 2),
         )
         draw.rounded_rectangle(
-            box, radius=10, fill=(245, 232, 205, 210), outline=(90, 45, 30, 220), width=2
+            box, radius=10, fill=(245, 232, 205, 220), outline=(90, 45, 30, 220), width=2
         )
         yy = y - total_h / 2
         for line in lines:
@@ -111,8 +102,7 @@ def main() -> None:
             draw.text((x - tw / 2, yy), line, font=font, fill=fill)
             yy += line_h
 
-    out = Image.alpha_composite(im, overlay)
-    atomic_save_jpeg(out, OUT)
+    atomic_save_jpeg(Image.alpha_composite(im, overlay), OUT)
     print("wrote", OUT)
 
 

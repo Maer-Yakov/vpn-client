@@ -1,8 +1,5 @@
 #!/usr/bin/env python3
-"""Compose advent letter cards: folk frames + Cyrillic text + scene art.
-
-Canonical copy source: letters_data.json (LETTERS.md is generated from it).
-"""
+"""Compose Ded Moroz advent letters with Russian applied-art frames."""
 
 from __future__ import annotations
 
@@ -21,16 +18,22 @@ except ImportError as exc:  # pragma: no cover
 
 ROOT = Path(__file__).resolve().parent
 ASSETS = Path(os.environ.get("TAYNA31_ASSETS", ROOT / "assets"))
+FRAMES = ASSETS / "frames"
+SCENES = ASSETS / "scenes"
 OUT = ROOT / "cards"
 OUT.mkdir(parents=True, exist_ok=True)
 
-FRAME = {
-    "khokhloma": ASSETS / "template-khokhloma-frame.jpg",
-    "gzhel": ASSETS / "template-gzhel-frame.jpg",
-    "palekh": ASSETS / "template-palekh-frame.jpg",
-}
+STYLES = (
+    "khokhloma",
+    "gzhel",
+    "dymkovo",
+    "gorodets",
+    "zhostovo",
+    "palekh",
+    "mezen",
+    "filimonovo",
+)
 
-# Prefer Liberation/DejaVu (common on Linux); fall back via FONT_CANDIDATES.
 FONT_CANDIDATES = {
     "title": [
         "/usr/share/fonts/truetype/liberation/LiberationSerif-Bold.ttf",
@@ -92,16 +95,11 @@ def wrap(draw: ImageDraw.ImageDraw, text: str, font: ImageFont.ImageFont, max_wi
 
 
 def find_parchment_box(im: Image.Image, style: str) -> tuple[int, int, int, int]:
-    """Detect the light parchment rectangle inside the ornamental frame.
-
-    For Gzhel (white outer field) we constrain the search to the inner
-    portion of the card so bright border pixels are not treated as parchment.
-    """
     rgb = im.convert("RGB")
     w, h = rgb.size
-
-    if style == "gzhel":
-        x_lo, x_hi = int(w * 0.14), int(w * 0.86)
+    # Bright-border crafts need a tighter inner search window.
+    if style in {"gzhel", "dymkovo", "gorodets", "filimonovo", "mezen"}:
+        x_lo, x_hi = int(w * 0.15), int(w * 0.85)
         y_lo, y_hi = int(h * 0.12), int(h * 0.90)
         threshold = 200
     else:
@@ -120,27 +118,29 @@ def find_parchment_box(im: Image.Image, style: str) -> tuple[int, int, int, int]
 
     top, bottom = bright_rows[0], bright_rows[-1]
     mid_y = (top + bottom) // 2
-    bright_cols = []
-    for x in range(x_lo, x_hi):
-        if sum(rgb.getpixel((x, mid_y))) / 3 > threshold:
-            bright_cols.append(x)
+    bright_cols = [x for x in range(x_lo, x_hi) if sum(rgb.getpixel((x, mid_y))) / 3 > threshold]
     if not bright_cols:
         return int(w * 0.16), top, int(w * 0.84), bottom
-
-    # Shrink slightly from detected edges to stay inside parchment.
     left = bright_cols[0] + int(w * 0.01)
     right = bright_cols[-1] - int(w * 0.01)
     return left, top, right, bottom
 
 
 def scene_path_for(n: int) -> Path:
-    jpg = ASSETS / f"scene-{n:02d}.jpg"
-    png = ASSETS / f"scene-{n:02d}.png"
-    if jpg.exists():
-        return jpg
-    if png.exists():
-        return png
-    raise FileNotFoundError(f"missing scene for day {n}: expected {jpg.name}")
+    for ext in (".jpg", ".png"):
+        path = SCENES / f"scene-{n:02d}{ext}"
+        if path.exists():
+            return path
+    raise FileNotFoundError(f"missing scene for day {n}")
+
+
+def frame_path_for(style: str) -> Path:
+    path = FRAMES / f"frame-{style}.jpg"
+    if not path.exists():
+        path = FRAMES / f"frame-{style}.png"
+    if not path.exists():
+        raise FileNotFoundError(f"missing frame template: frame-{style}")
+    return path
 
 
 def atomic_save_jpeg(im: Image.Image, dest: Path, quality: int = 92) -> None:
@@ -157,22 +157,17 @@ def atomic_save_jpeg(im: Image.Image, dest: Path, quality: int = 92) -> None:
 
 def compose_one(letter: dict) -> Path:
     style = letter["style"]
-    frame_path = FRAME[style]
-    if not frame_path.exists():
-        raise FileNotFoundError(f"missing frame template: {frame_path}")
-
-    base = Image.open(frame_path).convert("RGBA")
+    base = Image.open(frame_path_for(style)).convert("RGBA")
     W, H = base.size
     draw = ImageDraw.Draw(base)
 
     left, top, right, bottom = find_parchment_box(base, style)
-    pad = int((right - left) * 0.06)
+    pad = int((right - left) * 0.055)
     x0, x1 = left + pad, right - pad
     width = x1 - x0
 
     scene = Image.open(scene_path_for(letter["n"])).convert("RGBA")
-    scene_h = int((bottom - top) * 0.28)
-    text_bottom = bottom - scene_h - pad // 2
+    scene_h = int((bottom - top) * 0.26)
     target_w = width
     ratio = target_w / scene.width
     scene = scene.resize((target_w, max(1, int(scene.height * ratio))), Image.Resampling.LANCZOS)
@@ -184,7 +179,8 @@ def compose_one(letter: dict) -> Path:
     text_bottom = sy - pad // 3
 
     badge_r = int(W * 0.055)
-    cx, cy = W // 2, max(int(top - badge_r * 0.15), badge_r + 8)
+    cx = W // 2
+    cy = max(int(top - badge_r * 0.1), badge_r + 8)
     draw.ellipse(
         (cx - badge_r, cy - badge_r, cx + badge_r, cy + badge_r),
         fill=BADGE_FILL,
@@ -198,50 +194,59 @@ def compose_one(letter: dict) -> Path:
 
     y = top + pad
     title_font = load_font("title", max(22, W // 22))
-    body_font = load_font("body", max(16, W // 34))
-    small_font = load_font("ui", max(13, W // 42))
-    label_font = load_font("ui_bold", max(14, W // 38))
-    sign_font = load_font("title", max(16, W // 32))
+    body_font = load_font("body", max(15, W // 36))
+    small_font = load_font("ui", max(12, W // 44))
+    label_font = load_font("ui_bold", max(13, W // 40))
+    sign_font = load_font("title", max(15, W // 34))
+
+    date_line = f"{letter['n']} декабря"
+    for line in wrap(draw, date_line, small_font, width):
+        tw = draw.textlength(line, font=small_font)
+        draw.text((x0 + (width - tw) / 2, y), line, font=small_font, fill=INK_SOFT)
+        y += int(small_font.size * 1.25)
 
     for line in wrap(draw, letter["title"], title_font, width):
         tw = draw.textlength(line, font=title_font)
         draw.text((x0 + (width - tw) / 2, y), line, font=title_font, fill=INK)
-        y += int(title_font.size * 1.2)
-    y += int(pad * 0.25)
+        y += int(title_font.size * 1.15)
+    y += int(pad * 0.15)
 
-    for line in wrap(draw, letter["greeting"], body_font, width):
-        draw.text((x0, y), line, font=body_font, fill=INK)
-        y += int(body_font.size * 1.25)
-    y += int(pad * 0.2)
-
-    for line in wrap(draw, letter["body"], body_font, width):
-        if y + body_font.size > text_bottom - int(H * 0.18):
-            break
-        draw.text((x0, y), line, font=body_font, fill=INK)
-        y += int(body_font.size * 1.28)
-    y += int(pad * 0.35)
+    for block in (letter["greeting"], letter["from"], letter["story"]):
+        for line in wrap(draw, block, body_font, width):
+            if y + body_font.size > text_bottom - int(H * 0.20):
+                break
+            draw.text((x0, y), line, font=body_font, fill=INK)
+            y += int(body_font.size * 1.26)
+        y += int(pad * 0.12)
 
     draw.text((x0, y), "★ Задание:", font=label_font, fill=STAR)
-    y += int(label_font.size * 1.35)
+    y += int(label_font.size * 1.3)
     for line in wrap(draw, letter["task"], body_font, width):
-        if y + body_font.size > text_bottom - int(H * 0.10):
+        if y + body_font.size > text_bottom - int(H * 0.14):
             break
         draw.text((x0, y), line, font=body_font, fill=INK)
-        y += int(body_font.size * 1.28)
-    y += int(pad * 0.3)
+        y += int(body_font.size * 1.26)
+    y += int(pad * 0.15)
 
-    tip_label = "Подсказка для родителей:"
-    draw.text((x0, y), tip_label, font=small_font, fill=INK_SOFT)
-    y += int(small_font.size * 1.35)
+    if letter.get("teaser"):
+        for line in wrap(draw, letter["teaser"], body_font, width):
+            if y + body_font.size > text_bottom - int(H * 0.11):
+                break
+            draw.text((x0, y), line, font=body_font, fill=INK)
+            y += int(body_font.size * 1.26)
+        y += int(pad * 0.12)
+
+    draw.text((x0, y), "Родителям:", font=small_font, fill=INK_SOFT)
+    y += int(small_font.size * 1.3)
     for line in wrap(draw, letter["tip"], small_font, width):
         if y + small_font.size > text_bottom - int(H * 0.05):
             break
         draw.text((x0, y), line, font=small_font, fill=INK_SOFT)
-        y += int(small_font.size * 1.3)
+        y += int(small_font.size * 1.28)
 
-    sig = "Фонарщик Луми"
+    sig = letter.get("signature", "Дедушка Мороз и Искорка")
     sw = draw.textlength(sig, font=sign_font)
-    sig_y = min(y + int(pad * 0.35), text_bottom - sign_font.size - 4)
+    sig_y = min(y + int(pad * 0.25), text_bottom - sign_font.size - 4)
     draw.text((x0 + (width - sw) / 2, sig_y), sig, font=sign_font, fill=BADGE_STROKE)
 
     out = OUT / f"letter-{letter['n']:02d}-{style}.jpg"
@@ -251,42 +256,36 @@ def compose_one(letter: dict) -> Path:
 
 def require_all_assets(data: list[dict]) -> None:
     missing: list[str] = []
-    if not ASSETS.is_dir():
+    if not FRAMES.is_dir() or not SCENES.is_dir():
         raise SystemExit(
-            f"Assets directory not found: {ASSETS}\n"
-            "Expected bundled artwork under advent-tayna-31/assets/, "
-            "or set TAYNA31_ASSETS."
+            f"Assets missing under {ASSETS}. Need frames/ and scenes/ "
+            "(or set TAYNA31_ASSETS)."
         )
-    for style, path in FRAME.items():
-        if not path.exists():
-            missing.append(f"frame/{style}: {path.name}")
     for letter in data:
+        style = letter["style"]
+        try:
+            frame_path_for(style)
+        except FileNotFoundError as exc:
+            missing.append(str(exc))
         try:
             scene_path_for(letter["n"])
         except FileNotFoundError as exc:
             missing.append(str(exc))
     if missing:
-        raise SystemExit(
-            "Incomplete artwork set — refusing partial rebuild:\n  - "
-            + "\n  - ".join(missing)
-        )
+        raise SystemExit("Incomplete artwork — refusing partial rebuild:\n  - " + "\n  - ".join(missing))
 
 
 def main() -> None:
-    data_path = ROOT / "letters_data.json"
-    data = json.loads(data_path.read_text(encoding="utf-8"))
+    data = json.loads((ROOT / "letters_data.json").read_text(encoding="utf-8"))
     if len(data) != 31:
-        raise SystemExit(f"expected 31 letters in {data_path.name}, got {len(data)}")
+        raise SystemExit(f"expected 31 letters, got {len(data)}")
     require_all_assets(data)
-
     made = []
     for letter in data:
         path = compose_one(letter)
         made.append(path.name)
         print("wrote", path)
-    if len(made) != 31:
-        raise SystemExit(f"expected 31 cards, wrote {len(made)}")
-    print(f"done: {len(made)} cards -> {OUT}")
+    print(f"done: {len(made)} cards")
 
 
 if __name__ == "__main__":

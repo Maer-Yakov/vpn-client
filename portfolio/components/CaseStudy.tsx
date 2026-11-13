@@ -2,7 +2,8 @@ import { ArrowLeft, ArrowUpRight } from "lucide-react";
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { CaseMock } from "@/components/CaseMock";
-import { projects, type Project } from "@/data/projects";
+import { projects, type Project, type ProjectType } from "@/data/projects";
+import { portfolioTypeHref } from "@/lib/portfolio-filter";
 
 export function CaseStudy({ project }: { project: Project }) {
   switch (project.preview.kind) {
@@ -34,6 +35,41 @@ function BackLink() {
       <ArrowLeft size={16} aria-hidden />
       Все проекты
     </Link>
+  );
+}
+
+function TypeLink({ type, className }: { type: ProjectType; className: string }) {
+  return (
+    <Link href={portfolioTypeHref(type)} className={`${className} underline-offset-4 hover:underline`}>
+      {type}
+    </Link>
+  );
+}
+
+function SameType({ project }: { project: Project }) {
+  const others = projects.filter((item) => item.type === project.type && item.slug !== project.slug);
+  if (others.length === 0) return null;
+
+  return (
+    <section className="mt-12">
+      <h2 className="text-sm font-medium uppercase tracking-wide text-[var(--muted)]">Ещё {project.type}</h2>
+      <ul className={`mt-4 grid gap-3 ${others.length > 1 ? "sm:grid-cols-2" : ""}`}>
+        {others.map((other) => (
+          <li key={other.slug}>
+            <Link
+              href={`/portfolio/${other.slug}`}
+              className="block overflow-hidden rounded-xl border border-[var(--line)] transition duration-300 hover:border-accent"
+            >
+              <CaseMock project={other} size="thumb" />
+              <div className="p-4">
+                <p className="font-medium">{other.name}</p>
+                <p className="mt-1 text-sm leading-relaxed text-[var(--muted)]">{other.offer}</p>
+              </div>
+            </Link>
+          </li>
+        ))}
+      </ul>
+    </section>
   );
 }
 
@@ -128,7 +164,7 @@ function InboxCase({ project }: { project: Project }) {
       <BackLink />
       <div className="mt-6 flex flex-wrap items-end justify-between gap-3">
         <div>
-          <p className="text-xs font-medium text-emerald-700 dark:text-emerald-300">{project.type}</p>
+          <TypeLink type={project.type} className="text-xs font-medium text-emerald-700 dark:text-emerald-300" />
           <h1 className="mt-1 text-4xl font-semibold tracking-tight">{project.name}</h1>
         </div>
         <p className="max-w-sm text-sm text-[var(--muted)]">{project.audience}</p>
@@ -145,6 +181,7 @@ function InboxCase({ project }: { project: Project }) {
         <StackRow stack={project.stack} />
       </div>
       <OpenProject project={project} />
+      <SameType project={project} />
       <CaseNeighbors project={project} />
       <HireClose />
     </article>
@@ -157,7 +194,10 @@ function InvoiceCase({ project }: { project: Project }) {
       <CaseMock project={project} size="page" />
       <div>
         <BackLink />
-        <p className="mt-6 text-xs font-medium uppercase tracking-[0.16em] text-[#8a6a3b]">{project.type}</p>
+        <TypeLink
+          type={project.type}
+          className="mt-6 text-xs font-medium uppercase tracking-[0.16em] text-[#8a6a3b]"
+        />
         <h1 className="mt-2 text-4xl font-semibold tracking-tight">{project.name}</h1>
         <p className="mt-3 text-lg">{project.offer}</p>
         <p className="mt-2 text-sm text-[var(--muted)]">{project.audience}</p>
@@ -168,6 +208,7 @@ function InvoiceCase({ project }: { project: Project }) {
           <StackRow stack={project.stack} />
         </div>
         <OpenProject project={project} />
+      <SameType project={project} />
       <CaseNeighbors project={project} />
       <HireClose />
       </div>
@@ -195,6 +236,7 @@ function LandingCase({ project }: { project: Project }) {
         <StackRow stack={project.stack} />
       </div>
       <OpenProject project={project} />
+      <SameType project={project} />
       <CaseNeighbors project={project} />
       <HireClose />
     </article>
@@ -208,7 +250,7 @@ function ScheduleCase({ project }: { project: Project }) {
       <div className="mt-6 grid items-start gap-6 lg:grid-cols-[1.4fr_0.7fr]">
         <CaseMock project={project} size="page" />
         <div className="rounded-2xl border border-[var(--line)] p-5">
-          <p className="text-xs font-medium text-sky-700 dark:text-sky-300">{project.type}</p>
+          <TypeLink type={project.type} className="text-xs font-medium text-sky-700 dark:text-sky-300" />
           <h1 className="mt-2 text-3xl font-semibold tracking-tight">{project.name}</h1>
           <p className="mt-3 text-sm leading-relaxed">{project.offer}</p>
           <p className="mt-4 text-4xl font-semibold tracking-tight">
@@ -227,6 +269,7 @@ function ScheduleCase({ project }: { project: Project }) {
         <StackRow stack={project.stack} />
       </div>
       <OpenProject project={project} />
+      <SameType project={project} />
       <CaseNeighbors project={project} />
       <HireClose />
     </article>
@@ -237,9 +280,10 @@ function EstimateCase({ project }: { project: Project }) {
   return (
     <article className="rise mx-auto max-w-xl">
       <BackLink />
-      <p className="mt-6 text-xs font-medium uppercase tracking-[0.16em] text-amber-700 dark:text-amber-300">
-        {project.type}
-      </p>
+      <TypeLink
+        type={project.type}
+        className="mt-6 text-xs font-medium uppercase tracking-[0.16em] text-amber-700 dark:text-amber-300"
+      />
       <h1 className="mt-2 text-4xl font-semibold tracking-tight">{project.name}</h1>
       <p className="mt-3 text-[var(--muted)]">{project.audience}</p>
       <div className="mt-6">
@@ -252,6 +296,7 @@ function EstimateCase({ project }: { project: Project }) {
         <StackRow stack={project.stack} />
       </div>
       <OpenProject project={project} />
+      <SameType project={project} />
       <CaseNeighbors project={project} />
       <HireClose />
     </article>
@@ -262,7 +307,10 @@ function ShowcaseCase({ project }: { project: Project }) {
   return (
     <article className="rise">
       <BackLink />
-      <p className="mt-8 text-xs font-medium uppercase tracking-[0.2em] text-[var(--muted)]">{project.type}</p>
+      <TypeLink
+        type={project.type}
+        className="mt-8 text-xs font-medium uppercase tracking-[0.2em] text-[var(--muted)]"
+      />
       <h1 className="mt-3 max-w-3xl text-5xl font-semibold tracking-tight sm:text-6xl">{project.name}</h1>
       <p className="mt-4 max-w-xl text-xl leading-relaxed">{project.offer}</p>
       <div className="mt-8">
@@ -278,6 +326,7 @@ function ShowcaseCase({ project }: { project: Project }) {
         <StackRow stack={project.stack} />
       </div>
       <OpenProject project={project} />
+      <SameType project={project} />
       <CaseNeighbors project={project} />
       <HireClose />
     </article>

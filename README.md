@@ -47,3 +47,7 @@ APK: `app/build/outputs/apk/release/app-release.apk`.
 ## Туннель
 
 Каталог `tunnel` — исходники и `libwg-go.so` из [amneziawg-android](https://github.com/amnezia-vpn/amneziawg-android) `v3.1.20260814`. Лицензия Apache 2.0, текст в `tunnel/COPYING`.
+
+## Сайт-портфолио
+
+В каталоге `portfolio/` лежит отдельное приложение Next.js. К VPN-клиенту оно не относится. Как запустить и выложить на Vercel — в [portfolio/README.md](portfolio/README.md).

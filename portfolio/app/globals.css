@@ -1,0 +1,84 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+  --bg: #ffffff;
+  --fg: #0a0a0a;
+  --muted: #52525b;
+  --card: #ffffff;
+  --line: rgba(10, 10, 10, 0.1);
+  --soft: #f4f4f5;
+}
+
+.dark {
+  color-scheme: dark;
+  --bg: #0a0a0a;
+  --fg: #f5f5f5;
+  --muted: #a1a1aa;
+  --card: #141414;
+  --line: rgba(255, 255, 255, 0.1);
+  --soft: #1c1c1c;
+}
+
+html {
+  background: var(--bg);
+}
+
+body {
+  background: var(--bg);
+  color: var(--fg);
+}
+
+::selection {
+  background: #6366f1;
+  color: #ffffff;
+}
+
+@keyframes rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.rise {
+  animation: rise-in 0.7s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rise {
+    animation: none;
+  }
+}
+
+@layer components {
+  .shell {
+    @apply mx-auto w-full max-w-6xl px-4 sm:px-6;
+  }
+
+  .header-bar {
+    background: color-mix(in srgb, var(--bg) 86%, transparent);
+  }
+
+  .btn {
+    @apply inline-flex min-h-11 items-center justify-center gap-2 rounded-full px-5 py-2.5 text-sm font-medium transition duration-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent;
+  }
+
+  .btn-primary {
+    @apply btn bg-accent text-white hover:opacity-90;
+  }
+
+  .btn-ghost {
+    @apply btn border border-[var(--line)] hover:border-accent hover:text-accent;
+  }
+
+  .field {
+    @apply w-full rounded-xl border border-[var(--line)] bg-transparent px-3 py-2.5 text-sm text-[var(--fg)] outline-none transition duration-300 placeholder:text-[var(--muted)] focus:border-accent;
+  }
+}

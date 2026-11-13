@@ -37,6 +37,19 @@ function BackLink() {
   );
 }
 
+function HireClose() {
+  return (
+    <div className="mt-12 flex flex-col gap-4 border-t border-[var(--line)] pt-8 sm:flex-row sm:items-center sm:justify-between">
+      <p className="max-w-md text-sm leading-relaxed text-[var(--muted)]">
+        Нужна такая же вещь под свою задачу — напишите, кому это нужно и что сейчас делается руками.
+      </p>
+      <Link href="/about#contact" className="btn-primary shrink-0">
+        Связаться
+      </Link>
+    </div>
+  );
+}
+
 function OpenProject({ project }: { project: Project }) {
   const showLink = project.link !== "" && project.link !== "#";
   if (!showLink) return null;
@@ -102,6 +115,7 @@ function InboxCase({ project }: { project: Project }) {
         <StackRow stack={project.stack} />
       </div>
       <OpenProject project={project} />
+      <HireClose />
     </article>
   );
 }
@@ -123,6 +137,7 @@ function InvoiceCase({ project }: { project: Project }) {
           <StackRow stack={project.stack} />
         </div>
         <OpenProject project={project} />
+      <HireClose />
       </div>
     </article>
   );
@@ -148,6 +163,7 @@ function LandingCase({ project }: { project: Project }) {
         <StackRow stack={project.stack} />
       </div>
       <OpenProject project={project} />
+      <HireClose />
     </article>
   );
 }
@@ -178,6 +194,7 @@ function ScheduleCase({ project }: { project: Project }) {
         <StackRow stack={project.stack} />
       </div>
       <OpenProject project={project} />
+      <HireClose />
     </article>
   );
 }
@@ -201,6 +218,7 @@ function EstimateCase({ project }: { project: Project }) {
         <StackRow stack={project.stack} />
       </div>
       <OpenProject project={project} />
+      <HireClose />
     </article>
   );
 }
@@ -225,6 +243,7 @@ function ShowcaseCase({ project }: { project: Project }) {
         <StackRow stack={project.stack} />
       </div>
       <OpenProject project={project} />
+      <HireClose />
     </article>
   );
 }

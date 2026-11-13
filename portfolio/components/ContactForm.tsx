@@ -29,7 +29,13 @@ export function ContactForm() {
       </div>
       <label className="block text-sm">
         <span className="mb-1.5 block text-[var(--muted)]">Сообщение</span>
-        <textarea className="field resize-y" name="message" required rows={5} />
+        <textarea
+          className="field resize-y"
+          name="message"
+          required
+          rows={5}
+          placeholder="Кому это нужно и что сейчас делается руками"
+        />
       </label>
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
         <button type="submit" className="btn-primary">

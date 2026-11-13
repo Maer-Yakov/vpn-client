@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { CaseMock } from "@/components/CaseMock";
 import { ProjectCard } from "@/components/ProjectCard";
-import { featuredProjects, otherProjects } from "@/data/projects";
+import { featuredProjects, otherProjects, projectTypes } from "@/data/projects";
+import { portfolioTypeHref } from "@/lib/portfolio-filter";
 import { site, siteTitle } from "@/data/site";
 import { pageMeta } from "@/lib/seo";
 
@@ -11,6 +12,13 @@ export const metadata = pageMeta({
   path: "/",
   absoluteTitle: true,
 });
+
+/* COPY: короткая формулировка каждого типа на главной */
+const typeOffer = {
+  SaaS: "Сервис, который сам сортирует или напоминает",
+  Сайт: "Страница, которую можно отправить в тот же день",
+  Инструмент: "Счёт или смета без вечерней таблицы",
+} as const;
 
 export default function HomePage() {
   return (
@@ -36,6 +44,20 @@ export default function HomePage() {
             Смотреть работы
           </Link>
         </div>
+        {/* COPY: три типа заказа. Ссылки открывают портфолио уже с фильтром. */}
+        <ul className="mt-10 grid gap-3 sm:grid-cols-3">
+          {projectTypes.map((type) => (
+            <li key={type}>
+              <Link
+                href={portfolioTypeHref(type)}
+                className="block h-full rounded-xl border border-[var(--line)] p-4 transition duration-300 hover:border-accent"
+              >
+                <p className="text-sm font-medium text-accent">{type}</p>
+                <p className="mt-2 text-sm leading-relaxed">{typeOffer[type]}</p>
+              </Link>
+            </li>
+          ))}
+        </ul>
       </section>
 
       <section>

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Ready-to-show PowerPoint for lesson 6 — rhythm 0–1.5 years."""
+"""Ready-to-show PowerPoint for lesson 6 — with planned illustrations."""
 
 from pathlib import Path
 
@@ -9,7 +9,6 @@ from pptx.enum.shapes import MSO_SHAPE
 from pptx.enum.text import MSO_ANCHOR, PP_ALIGN
 from pptx.util import Inches, Pt
 
-# Soft infant-care palette (not purple / not terracotta-cream AI default)
 INK = RGBColor(0x1E, 0x2F, 0x3A)
 CREAM = RGBColor(0xF7, 0xFA, 0xFC)
 SAND = RGBColor(0xE8, 0xF0, 0xF4)
@@ -19,15 +18,37 @@ CORAL = RGBColor(0xD4, 0x7A, 0x6A)
 GOLD = RGBColor(0xC9, 0xA2, 0x4E)
 LEAF = RGBColor(0x5A, 0x8F, 0x7B)
 SKY = RGBColor(0x5B, 0x9B, 0xB8)
-ROSE = RGBColor(0xB8, 0x6B, 0x7E)
 WHITE = RGBColor(0xFF, 0xFF, 0xFF)
 MUTED = RGBColor(0x5A, 0x6E, 0x78)
 SOFT = RGBColor(0xE4, 0xF0, 0xF3)
 RED_SOFT = RGBColor(0xC4, 0x5C, 0x5C)
 GREEN_SOFT = RGBColor(0x4A, 0x9A, 0x7A)
 
-OUT = Path(__file__).resolve().parent / "zanyatie-06-prezentaciya.pptx"
+ROOT = Path(__file__).resolve().parent
+ASSETS = ROOT / "zanyatie-06-assets"
+OUT = ROOT / "zanyatie-06-prezentaciya.pptx"
 ART = Path("/opt/cursor/artifacts/zanyatie-06-prezentaciya.pptx")
+
+IMG = {
+    1: "z06-01-title.jpg",
+    2: "z06-02-doors.jpg",
+    3: "z06-03-ritual.jpg",
+    4: "z06-04-mindmap.jpg",
+    5: "z06-05-voice-waves.jpg",
+    6: "z06-06-intonations.jpg",
+    7: "z06-07-genres.jpg",
+    8: "z06-08-knees.jpg",
+    9: "z06-09-contact.jpg",
+    10: "z06-10-traffic.jpg",
+    11: "z06-11-stations.jpg",
+    12: "z06-12-arms.jpg",
+    13: "z06-13-ladushki.jpg",
+    14: "z06-14-pendulum.jpg",
+    15: "z06-15-rattle.jpg",
+    16: "z06-16-training.jpg",
+    17: "z06-17-checklist.jpg",
+    18: "z06-18-finale.jpg",
+}
 
 
 def set_run(p, text, *, size=18, bold=False, color=INK, font="Georgia"):
@@ -50,7 +71,7 @@ def add_textbox(slide, left, top, width, height, text, *, size=18, bold=False, c
     return box
 
 
-def add_lines(slide, left, top, width, height, lines, *, size=16, color=INK, bold_first=False, spacing=6):
+def add_lines(slide, left, top, width, height, lines, *, size=14, color=INK, spacing=4):
     box = slide.shapes.add_textbox(left, top, width, height)
     tf = box.text_frame
     tf.word_wrap = True
@@ -58,7 +79,7 @@ def add_lines(slide, left, top, width, height, lines, *, size=16, color=INK, bol
         p = tf.paragraphs[0] if i == 0 else tf.add_paragraph()
         p.alignment = PP_ALIGN.LEFT
         p.space_after = Pt(spacing)
-        set_run(p, line, size=size, bold=(bold_first and i == 0), color=color)
+        set_run(p, line, size=size, color=color)
     return box
 
 
@@ -112,28 +133,17 @@ def accent_bar(slide):
 
 def title_block(slide, title, subtitle=None):
     accent_bar(slide)
-    add_textbox(slide, Inches(0.45), Inches(0.22), Inches(12.5), Inches(0.65), title, size=26, bold=True, color=TEAL_DEEP)
+    add_textbox(slide, Inches(0.45), Inches(0.18), Inches(12.5), Inches(0.55), title, size=24, bold=True, color=TEAL_DEEP)
     if subtitle:
-        add_textbox(slide, Inches(0.45), Inches(0.85), Inches(12.5), Inches(0.35), subtitle, size=15, color=MUTED, font="Calibri")
+        add_textbox(slide, Inches(0.45), Inches(0.72), Inches(12.5), Inches(0.32), subtitle, size=14, color=MUTED, font="Calibri")
 
 
-def card(slide, left, top, width, height, fill, title, body_lines, title_color=WHITE, body_color=WHITE):
-    rounded(slide, left, top, width, height, fill)
-    add_textbox(slide, left + Inches(0.18), top + Inches(0.12), width - Inches(0.3), Inches(0.38), title, size=15, bold=True, color=title_color)
-    add_lines(
-        slide,
-        left + Inches(0.18),
-        top + Inches(0.5),
-        width - Inches(0.3),
-        height - Inches(0.6),
-        body_lines,
-        size=12,
-        color=body_color,
-        spacing=3,
-    )
+def picture(slide, n, left, top, width, height):
+    path = ASSETS / IMG[n]
+    return slide.shapes.add_picture(str(path), left, top, width=width, height=height)
 
 
-def table(slide, left, top, width, rows, col_widths, *, row_h=0.42):
+def table(slide, left, top, width, rows, col_widths, *, row_h=0.38):
     cols = len(rows[0])
     shape = slide.shapes.add_table(len(rows), cols, left, top, width, Inches(row_h * len(rows)))
     tbl = shape.table
@@ -158,9 +168,10 @@ def table(slide, left, top, width, rows, col_widths, *, row_h=0.42):
     return shape
 
 
-def icon_pill(slide, left, top, label, color):
-    rounded(slide, left, top, Inches(2.4), Inches(0.55), color)
-    add_textbox(slide, left, top + Inches(0.1), Inches(2.4), Inches(0.4), label, size=13, bold=True, color=WHITE, align=PP_ALIGN.CENTER, font="Calibri")
+def card(slide, left, top, width, height, fill, title, body_lines):
+    rounded(slide, left, top, width, height, fill)
+    add_textbox(slide, left + Inches(0.15), top + Inches(0.1), width - Inches(0.25), Inches(0.35), title, size=14, bold=True, color=WHITE)
+    add_lines(slide, left + Inches(0.15), top + Inches(0.45), width - Inches(0.25), height - Inches(0.55), body_lines, size=12, color=WHITE, spacing=3)
 
 
 def build():
@@ -172,411 +183,374 @@ def build():
     # ---- 1 TITLE ----
     s = prs.slides.add_slide(blank)
     bg(s, TEAL_DEEP)
-    oval(s, Inches(-0.8), Inches(-1.0), Inches(3.2), Inches(3.2), TEAL)
-    oval(s, Inches(11.0), Inches(5.0), Inches(3.2), Inches(3.2), CORAL)
-    oval(s, Inches(10.8), Inches(-0.7), Inches(2.4), Inches(2.4), GOLD)
-    add_textbox(s, Inches(1.0), Inches(1.55), Inches(11), Inches(0.4), "ЗАНЯТИЕ 6 · МОДУЛЬ II", size=16, color=GOLD, align=PP_ALIGN.CENTER, font="Calibri")
-    add_textbox(
-        s, Inches(0.8), Inches(2.15), Inches(11.7), Inches(1.4),
-        "Ритмическое развитие детей\nот рождения до 1,5 лет",
-        size=36, bold=True, color=WHITE, align=PP_ALIGN.CENTER,
-    )
-    add_textbox(
-        s, Inches(1.5), Inches(4.0), Inches(10.3), Inches(0.5),
-        "Не танец по правилам — телесный диалог",
-        size=20, color=SAND, align=PP_ALIGN.CENTER, font="Calibri",
-    )
-    add_textbox(
-        s, Inches(2.0), Inches(4.7), Inches(9.3), Inches(0.4),
-        "услышал  →  почувствовал рядом со взрослым  →  оживился / успокоился",
-        size=15, color=WHITE, align=PP_ALIGN.CENTER, font="Calibri",
-    )
-    for i, (lab, col) in enumerate([("ухо", SKY), ("сердце", CORAL), ("руки", LEAF), ("погремушка", GOLD)]):
-        icon_pill(s, Inches(2.0 + i * 2.55), Inches(5.5), lab, col)
-    add_textbox(s, Inches(1), Inches(6.6), Inches(11.3), Inches(0.3), "Бабаджан · Ветлугина · Картушина «Забавы для малышей»", size=12, color=SAND, align=PP_ALIGN.CENTER, font="Calibri")
+    oval(s, Inches(-0.8), Inches(-1.0), Inches(3.0), Inches(3.0), TEAL)
+    oval(s, Inches(11.2), Inches(5.2), Inches(2.8), Inches(2.8), CORAL)
+    add_textbox(s, Inches(0.5), Inches(0.35), Inches(6.2), Inches(0.35), "ЗАНЯТИЕ 6 · МОДУЛЬ II", size=14, color=GOLD, font="Calibri")
+    add_textbox(s, Inches(0.5), Inches(0.85), Inches(6.2), Inches(1.4), "Ритмическое развитие детей\nот рождения до 1,5 лет", size=30, bold=True, color=WHITE)
+    add_textbox(s, Inches(0.5), Inches(2.5), Inches(6.2), Inches(0.4), "Не танец по правилам — телесный диалог", size=16, color=SAND, font="Calibri")
+    add_textbox(s, Inches(0.5), Inches(3.15), Inches(6.2), Inches(0.7), "услышал → почувствовал рядом\nсо взрослым → оживился / успокоился", size=14, color=WHITE, font="Calibri")
+    picture(s, 1, Inches(7.0), Inches(0.6), Inches(5.8), Inches(5.5))
+    add_textbox(s, Inches(0.5), Inches(6.5), Inches(12), Inches(0.3), "Бабаджан · Ветлугина · Картушина «Забавы для малышей»", size=12, color=SAND, font="Calibri")
 
-    # ---- 2 WHY SPECIAL ----
+    # ---- 2 ----
     s = prs.slides.add_slide(blank)
     bg(s)
     title_block(s, "Чем этот возраст особенный", "Самый ранний этаж ритмики")
+    picture(s, 2, Inches(0.45), Inches(1.2), Inches(6.6), Inches(4.8))
     table(
-        s, Inches(0.5), Inches(1.5), Inches(8.2),
+        s, Inches(7.3), Inches(1.2), Inches(5.5),
         [
             ["0–1,5 лет", "Позже (3–5+)"],
-            ["совместное движение", "больше самостоятельности"],
-            ["голос важнее колонки", "запись используется шире"],
-            ["нет строя и «стопа по правилу»", "появляются игровые правила"],
-            ["контакт = главное условие", "контакт важен, но уже есть задача"],
+            ["совместное движение", "самостоятельность"],
+            ["голос важнее колонки", "запись шире"],
+            ["нет строя", "игровые правила"],
+            ["контакт = главное", "контакт + задача"],
         ],
-        [Inches(4.0), Inches(4.2)],
+        [Inches(2.7), Inches(2.8)],
         row_h=0.55,
     )
-    card(s, Inches(9.0), Inches(1.5), Inches(3.8), Inches(2.2), TEAL, "Дверь открыта", ["тёплый диалог", "голос + касание", "короткий повтор"])
-    card(s, Inches(9.0), Inches(3.9), Inches(3.8), Inches(2.2), RED_SOFT, "Дверь закрыта", ["номер / строй", "танец по правилам", "давление до отказа"])
-    add_textbox(s, Inches(0.5), Inches(6.4), Inches(12), Inches(0.4), "Младенец не готовит номер — он учится быть в ритме рядом со взрослым.", size=15, bold=True, color=TEAL_DEEP)
+    add_textbox(s, Inches(7.3), Inches(5.0), Inches(5.5), Inches(1.2), "Младенец не готовит номер —\nон учится быть в ритме рядом\nсо взрослым.", size=15, bold=True, color=TEAL_DEEP)
     footer(s, 2)
 
-    # ---- 3 GOAL ----
+    # ---- 3 ----
     s = prs.slides.add_slide(blank)
     bg(s)
     title_block(s, "Чему учимся сегодня", "Цель занятия для студента")
     steps = [
-        ("1", "Понять слух и движение младенца"),
-        ("2", "Увидеть реакции на интонации"),
-        ("3", "Использовать колыбельные, потешки, пестушки"),
-        ("4", "Двигаться вместе со взрослым"),
-        ("5", "Держать телесный и эмоциональный контакт"),
-        ("6", "Провести мягкие игры и контрасты"),
+        "1. Понять слух и движение младенца",
+        "2. Увидеть реакции на интонации",
+        "3. Использовать колыбельные, потешки, пестушки",
+        "4. Двигаться вместе со взрослым",
+        "5. Держать телесный и эмоциональный контакт",
+        "6. Провести мягкие игры и контрасты",
     ]
-    for i, (n, t) in enumerate(steps):
-        y = Inches(1.4 + i * 0.7)
-        oval(s, Inches(0.55), y, Inches(0.5), Inches(0.5), TEAL if i % 2 == 0 else LEAF)
-        add_textbox(s, Inches(0.55), y + Inches(0.08), Inches(0.5), Inches(0.35), n, size=14, bold=True, color=WHITE, align=PP_ALIGN.CENTER, font="Calibri")
-        add_textbox(s, Inches(1.25), y + Inches(0.08), Inches(7.5), Inches(0.4), t, size=16, color=INK)
-    card(s, Inches(9.0), Inches(1.5), Inches(3.8), Inches(2.0), TEAL, "Знает", ["особенности 0–1,5 лет", "границы «можно / нельзя»"])
-    card(s, Inches(9.0), Inches(3.7), Inches(3.8), Inches(2.2), CORAL, "Умеет", ["покачивание / ладушки", "погремушка со «сном»", "стоп при переутомлении"])
+    for i, t in enumerate(steps):
+        y = Inches(1.2 + i * 0.7)
+        oval(s, Inches(0.5), y, Inches(0.45), Inches(0.45), TEAL if i % 2 == 0 else LEAF)
+        add_textbox(s, Inches(0.5), y + Inches(0.07), Inches(0.45), Inches(0.3), str(i + 1), size=13, bold=True, color=WHITE, align=PP_ALIGN.CENTER, font="Calibri")
+        add_textbox(s, Inches(1.15), y + Inches(0.07), Inches(5.8), Inches(0.4), t[3:], size=15, color=INK)
+    picture(s, 3, Inches(7.3), Inches(1.2), Inches(5.5), Inches(5.2))
     footer(s, 3)
 
-    # ---- 4 MAP ----
+    # ---- 4 ----
     s = prs.slides.add_slide(blank)
     bg(s)
     title_block(s, "Карта темы", "От слуха — к короткой забаве")
-    topics = [
-        (TEAL, "1. Слух и движение"),
-        (SKY, "2. Интонации"),
-        (LEAF, "3. Колыбельная / потешка"),
-        (GOLD, "4. Вместе со взрослым"),
-        (CORAL, "5. Контакт"),
-        (ROSE, "6. Практика игр"),
-    ]
-    for i, (col, t) in enumerate(topics):
-        col_i = i % 3
-        row_i = i // 3
-        card(s, Inches(0.5 + col_i * 4.2), Inches(1.5 + row_i * 2.0), Inches(3.9), Inches(1.7), col, t, ["ключевой блок занятия"])
+    picture(s, 4, Inches(0.4), Inches(1.15), Inches(8.4), Inches(5.5))
     table(
-        s, Inches(0.5), Inches(5.6), Inches(12.3),
+        s, Inches(9.0), Inches(1.3), Inches(3.9),
         [["Слайды", "Блок"], ["5–11", "теория"], ["12–16", "практика"], ["17–18", "чек-лист и итог"]],
-        [Inches(3.0), Inches(9.3)],
-        row_h=0.35,
+        [Inches(1.5), Inches(2.4)],
+        row_h=0.55,
     )
+    add_lines(s, Inches(9.0), Inches(4.0), Inches(3.9), Inches(2.5), [
+        "1. Слух и движение",
+        "2. Интонации",
+        "3. Колыбельная / потешка",
+        "4. Вместе со взрослым",
+        "5. Контакт",
+        "6. Практика игр",
+    ], size=14, color=TEAL_DEEP)
     footer(s, 4)
 
-    # ---- 5 HEARING ----
+    # ---- 5 ----
     s = prs.slides.add_slide(blank)
     bg(s)
     title_block(s, "Слуховое и двигательное восприятие", "Звук входит вместе с теплом рук")
+    picture(s, 5, Inches(0.4), Inches(1.15), Inches(6.8), Inches(4.5))
     table(
-        s, Inches(0.5), Inches(1.4), Inches(12.3),
+        s, Inches(7.4), Inches(1.15), Inches(5.5),
         [
-            ["Период", "Слух", "Движение"],
-            ["Первые месяцы", "голос, ориентировка на звук", "общие реакции тела"],
-            ["Ближе к полугоду", "интерес к погремушке, интонации", "тянется, трясёт, оживляется"],
-            ["К 1–1,5 годам", "короткие игровые сигналы", "подражает простым жестам рядом"],
+            ["Период", "Слух / движение"],
+            ["Первые месяцы", "голос → общие реакции"],
+            ["~полгода", "погремушка → оживление"],
+            ["1–1,5 года", "сигналы → подражание"],
         ],
-        [Inches(2.8), Inches(4.7), Inches(4.8)],
-        row_h=0.6,
+        [Inches(2.2), Inches(3.3)],
+        row_h=0.55,
     )
-    rounded(s, Inches(0.5), Inches(4.0), Inches(12.3), Inches(1.3), SAND)
-    add_textbox(s, Inches(0.8), Inches(4.25), Inches(11.7), Inches(0.4), "голос / звук  →  реакция тела  →  повтор в контакте  →  привычный отклик", size=18, bold=True, color=TEAL_DEEP, align=PP_ALIGN.CENTER)
-    add_textbox(s, Inches(0.8), Inches(4.8), Inches(11.7), Inches(0.35), "Даём сенсорный опыт, а не комбинацию. Волны голоса взрослого «входят» через руки.", size=14, color=MUTED, align=PP_ALIGN.CENTER, font="Calibri")
+    rounded(s, Inches(7.4), Inches(4.0), Inches(5.5), Inches(2.2), SAND)
+    add_textbox(s, Inches(7.6), Inches(4.25), Inches(5.1), Inches(1.7), "голос / звук → реакция тела\n→ повтор в контакте\n→ привычный отклик\n\nДаём сенсорный опыт,\nа не комбинацию.", size=14, bold=True, color=TEAL_DEEP)
     footer(s, 5)
 
-    # ---- 6 INTONATION ----
+    # ---- 6 ----
     s = prs.slides.add_slide(blank)
     bg(s)
     title_block(s, "Реакции на музыкальные интонации", "Интонация — эмоциональное лицо звука")
+    picture(s, 6, Inches(0.4), Inches(1.15), Inches(6.6), Inches(4.6))
     table(
-        s, Inches(0.45), Inches(1.35), Inches(12.4),
+        s, Inches(7.2), Inches(1.15), Inches(5.7),
         [
-            ["Интонация", "Желаемая реакция", "Чего избегать"],
-            ["Мягкая певучая", "спокойствие, контакт", "громкая запись без тепла голоса"],
-            ["Светлая игривая", "оживление", "длинная серия до перевозбуждения"],
-            ["Тихо / чуть громче", "внимание", "резкие скачки и крик"],
-            ["Резкая громкая", "вздрагивание, плач", "использовать «для веселья»"],
+            ["Интонация", "Реакция"],
+            ["Мягкая певучая", "спокойствие"],
+            ["Светлая игривая", "оживление"],
+            ["Тихо / чуть громче", "внимание"],
+            ["Резкая громкая ✕", "плач"],
         ],
-        [Inches(3.0), Inches(4.2), Inches(5.2)],
-        row_h=0.55,
+        [Inches(2.9), Inches(2.8)],
+        row_h=0.5,
     )
-    for i, (lab, col) in enumerate([("спокойно ✓", LEAF), ("игриво ✓", GOLD), ("резко ✕", RED_SOFT)]):
-        icon_pill(s, Inches(1.5 + i * 3.5), Inches(5.5), lab, col)
-    add_textbox(s, Inches(0.5), Inches(6.3), Inches(12), Inches(0.35), "сначала лицо и голос  →  потом предмет  →  потом запись", size=15, bold=True, color=TEAL_DEEP, align=PP_ALIGN.CENTER)
+    add_textbox(s, Inches(7.2), Inches(4.9), Inches(5.7), Inches(1.2), "сначала лицо и голос\n→ потом предмет\n→ потом запись", size=15, bold=True, color=TEAL_DEEP)
     footer(s, 6)
 
-    # ---- 7 GENRES ----
+    # ---- 7 ----
     s = prs.slides.add_slide(blank)
     bg(s)
     title_block(s, "Колыбельные, потешки, пестушки", "Главный «учебник» ритма для младенца")
+    picture(s, 7, Inches(0.4), Inches(1.15), Inches(7.0), Inches(4.5))
     table(
-        s, Inches(0.45), Inches(1.35), Inches(12.4),
+        s, Inches(7.6), Inches(1.15), Inches(5.3),
         [
-            ["Жанр", "Ритмическая роль", "Как использовать"],
-            ["Колыбельная", "медленный пульс, успокоение", "покачивание, тихий голос"],
-            ["Потешка", "слоговой ритм, повтор", "жест рук, ладушки"],
-            ["Пестушка", "ритм заботы + касание", "поглаживание, пальчики"],
+            ["Жанр", "Как"],
+            ["Колыбельная", "качать, тихо"],
+            ["Потешка", "жест, ладушки"],
+            ["Пестушка", "касание"],
         ],
-        [Inches(2.8), Inches(4.6), Inches(5.0)],
-        row_h=0.55,
+        [Inches(2.5), Inches(2.8)],
+        row_h=0.5,
     )
-    card(s, Inches(0.5), Inches(4.3), Inches(6.0), Inches(2.2), LEAF, "Беру", ["добрый короткий образ", "2–6 строк на заход", "можно остановиться"])
-    card(s, Inches(6.8), Inches(4.3), Inches(6.0), Inches(2.2), RED_SOFT, "Не беру", ["страшилки, резкая динамика", "длинный монолог", "«дожать до конца любой ценой»"])
+    card(s, Inches(7.6), Inches(3.6), Inches(2.5), Inches(2.5), LEAF, "Беру", ["добрый образ", "2–6 строк", "можно стоп"])
+    card(s, Inches(10.3), Inches(3.6), Inches(2.6), Inches(2.5), RED_SOFT, "Не беру", ["страшилки", "длинный текст", "дожать любой ценой"])
     footer(s, 7)
 
-    # ---- 8 CO-MOVEMENT ----
+    # ---- 8 ----
     s = prs.slides.add_slide(blank)
     bg(s)
     title_block(s, "Движение вместе со взрослым", "Взрослое тело — безопасный метроном")
+    picture(s, 8, Inches(0.4), Inches(1.15), Inches(7.2), Inches(5.0))
     table(
-        s, Inches(0.45), Inches(1.35), Inches(7.8),
+        s, Inches(7.85), Inches(1.15), Inches(5.0),
         [
-            ["Форма", "Когда уместно"],
-            ["На руках / на коленях", "база возраста"],
-            ["Лёжа — мягкое ведение рук/ног", "младшие месяцы"],
-            ["Сидя с опорой", "вместе хлопаем, качаемся"],
-            ["У опоры / с поддержкой", "только при физической готовности"],
+            ["Форма", "Когда"],
+            ["На руках / коленях", "база"],
+            ["Лёжа — мягко", "младшие месяцы"],
+            ["Сидя с опорой", "хлопаем, качаемся"],
+            ["У опоры", "только при готовности"],
         ],
-        [Inches(4.0), Inches(3.8)],
-        row_h=0.55,
+        [Inches(2.7), Inches(2.3)],
+        row_h=0.48,
     )
-    card(s, Inches(8.5), Inches(1.35), Inches(4.3), Inches(3.6), TEAL, "Принципы", [
-        "приглашать, не тащить",
-        "ритм задаёт взрослый",
-        "коротко (часто 20–40 сек)",
-        "плач / отворот = стоп",
-        "или упрощение",
-        "",
-        "✗ не требовать топать",
-        "  под марш в строю",
-    ])
-    add_textbox(s, Inches(0.5), Inches(5.5), Inches(12), Inches(0.9), "Картинка к слайду: взрослый и младенец на коленях «топ-топ»; рядом запрет строя.", size=14, color=MUTED, font="Calibri")
+    add_lines(s, Inches(7.85), Inches(4.0), Inches(5.0), Inches(2.2), [
+        "• приглашать, не тащить",
+        "• ритм задаёт взрослый",
+        "• коротко (20–40 сек)",
+        "• плач / отворот = стоп",
+        "• ✕ не топать в строю",
+    ], size=14, color=TEAL_DEEP)
     footer(s, 8)
 
-    # ---- 9 CONTACT ----
+    # ---- 9 ----
     s = prs.slides.add_slide(blank)
     bg(s)
     title_block(s, "Телесная чувствительность и контакт", "Без взгляда и тепла ритм не приживается")
+    picture(s, 9, Inches(0.4), Inches(1.15), Inches(6.8), Inches(4.8))
     table(
-        s, Inches(0.45), Inches(1.4), Inches(12.4),
+        s, Inches(7.4), Inches(1.15), Inches(5.5),
         [
             ["Есть контакт", "Нет контакта"],
-            ["осмысленное оживление / успокоение", "вздрагивание, отворот, плач"],
-            ["повтор приятен", "стимул как давление"],
-            ["можно чуть усложнить", "нужно упростить / остановиться"],
+            ["оживление / покой", "вздрагивание, плач"],
+            ["повтор приятен", "стимул = давление"],
+            ["чуть усложнить", "упростить / стоп"],
         ],
-        [Inches(6.2), Inches(6.2)],
-        row_h=0.6,
+        [Inches(2.7), Inches(2.8)],
+        row_h=0.55,
     )
-    rounded(s, Inches(0.5), Inches(4.0), Inches(12.3), Inches(2.2), SAND)
-    add_textbox(s, Inches(0.8), Inches(4.3), Inches(11.7), Inches(0.45), "взгляд + голос + касание + пауза  =  эмоциональная безопасность", size=20, bold=True, color=TEAL_DEEP, align=PP_ALIGN.CENTER)
-    add_textbox(
-        s, Inches(0.8), Inches(5.1), Inches(11.7), Inches(0.7),
-        "Вывод теории: ритм 0–1,5 лет = мягкий слух + совместное тело + голос + повтор + безопасность.",
-        size=15, color=INK, align=PP_ALIGN.CENTER, font="Calibri",
-    )
+    rounded(s, Inches(7.4), Inches(4.0), Inches(5.5), Inches(2.2), SAND)
+    add_textbox(s, Inches(7.6), Inches(4.3), Inches(5.1), Inches(1.6), "взгляд + голос +\nкасание + пауза\n=\nэмоциональная безопасность", size=15, bold=True, color=TEAL_DEEP, align=PP_ALIGN.CENTER)
     footer(s, 9)
 
-    # ---- 10 CAN / CANNOT ----
+    # ---- 10 ----
     s = prs.slides.add_slide(blank)
     bg(s)
-    title_block(s, "Можно и нельзя в 0–1,5 лет", "Границы мягкости")
-    card(s, Inches(0.45), Inches(1.35), Inches(6.1), Inches(4.6), GREEN_SOFT, "Можно ✓", [
-        "петь, качать, гладить в ритме",
-        "короткие потешки и ладушки",
-        "мягкий контраст тихо / чуть громче",
-        "погремушка с ритуалом «спит»",
-        "остановиться по состоянию ребёнка",
+    title_block(s, "Можно и нельзя в 0–1,5 лет", "Границы мягкости · светофор")
+    picture(s, 10, Inches(0.4), Inches(1.15), Inches(5.8), Inches(5.2))
+    card(s, Inches(6.5), Inches(1.2), Inches(3.2), Inches(4.6), GREEN_SOFT, "Можно ✓", [
+        "петь, качать, гладить",
+        "короткие потешки",
+        "мягкий контраст",
+        "погремушка «спит»",
+        "стоп по состоянию",
     ])
-    card(s, Inches(6.8), Inches(1.35), Inches(6.1), Inches(4.6), RED_SOFT, "Нельзя ✕", [
+    card(s, Inches(9.9), Inches(1.2), Inches(3.0), Inches(4.6), RED_SOFT, "Нельзя ✕", [
         "трясти, подбрасывать",
         "долбить до отказа",
-        "крик, хлопок у уха",
-        "долгий хаотичный шум",
-        "«танец по правилам», строй",
+        "крик / хлопок у уха",
+        "долгий хаос-шум",
+        "танец по правилам",
     ])
-    add_textbox(s, Inches(0.5), Inches(6.2), Inches(12), Inches(0.4), "Право на паузу — профессиональный навык, не слабость.", size=16, bold=True, color=TEAL_DEEP, align=PP_ALIGN.CENTER)
+    add_textbox(s, Inches(6.5), Inches(6.1), Inches(6.4), Inches(0.4), "Право на паузу — профессиональный навык.", size=14, bold=True, color=TEAL_DEEP)
     footer(s, 10)
 
-    # ---- 11 PRACTICE OVERVIEW ----
+    # ---- 11 ----
     s = prs.slides.add_slide(blank)
     bg(s)
     title_block(s, "Обзор практики", "Пять мягких блоков")
-    blocks = [
-        (TEAL, "Игры на руках", "ритм через тело взрослого"),
-        (SKY, "Ладушки / пальчики", "слог + мелкий жест"),
-        (LEAF, "Покачивания", "медленный пульс, смена состояния"),
-        (GOLD, "Погремушки", "звук ↔ тишина"),
-        (CORAL, "Сигналы и контрасты", "услышать разницу без перегруза"),
-    ]
-    for i, (col, t, b) in enumerate(blocks):
-        card(s, Inches(0.4 + i * 2.55), Inches(1.5), Inches(2.4), Inches(3.8), col, t, [b, "", "одна задача", "обязательный стоп"])
-    add_textbox(s, Inches(0.5), Inches(5.7), Inches(12), Inches(0.7), "В каждой пробе — одна задача и обязательный стоп. Пять станций вокруг младенца на руках.", size=15, color=MUTED, align=PP_ALIGN.CENTER, font="Calibri")
+    picture(s, 11, Inches(0.4), Inches(1.15), Inches(8.2), Inches(5.3))
+    add_lines(s, Inches(8.9), Inches(1.3), Inches(4.0), Inches(5.0), [
+        "1. Игры на руках",
+        "2. Ладушки / пальчики",
+        "3. Покачивания",
+        "4. Погремушки",
+        "5. Сигналы и контрасты",
+        "",
+        "В каждой пробе —",
+        "одна задача",
+        "и обязательный стоп.",
+    ], size=15, color=TEAL_DEEP)
     footer(s, 11)
 
-    # ---- 12 HANDS ----
+    # ---- 12 ----
     s = prs.slides.add_slide(blank)
     bg(s)
     title_block(s, "Практика 1. Игры на руках", "Покачать — не значит растрясти")
+    picture(s, 12, Inches(0.4), Inches(1.15), Inches(7.0), Inches(5.0))
     table(
-        s, Inches(0.45), Inches(1.4), Inches(8.0),
+        s, Inches(7.6), Inches(1.15), Inches(5.3),
         [
             ["Шаг", "Действие"],
-            ["1", "устойчиво взять, поддержать голову (модель младшего)"],
-            ["2", "тихий напев + мягкое качание"],
-            ["3", "чуть оживлённый напев + лёгкий «топ-топ» без подпрыгивания"],
-            ["4", "стоп: прижать, снизить голос, пауза"],
+            ["1", "устойчиво взять, голова"],
+            ["2", "тихий напев + качание"],
+            ["3", "лёгкий топ-топ без прыжка"],
+            ["4", "стоп: прижать, пауза"],
         ],
-        [Inches(1.0), Inches(7.0)],
-        row_h=0.6,
+        [Inches(1.0), Inches(4.3)],
+        row_h=0.55,
     )
-    card(s, Inches(8.7), Inches(1.4), Inches(4.1), Inches(3.6), CORAL, "Безопасность", [
-        "не трясти",
-        "не подбрасывать",
-        "читать «плач» модели",
-        "стоп сразу",
-        "",
-        "✓ правильная поддержка",
-        "✕ подбрасывание",
-    ])
+    add_textbox(s, Inches(7.6), Inches(4.5), Inches(5.3), Inches(1.5), "не трясти · не подбрасывать\nчитать «плач» модели · стоп", size=15, bold=True, color=CORAL)
     footer(s, 12)
 
-    # ---- 13 LADUSHKI ----
+    # ---- 13 ----
     s = prs.slides.add_slide(blank)
     bg(s)
     title_block(s, "Практика 2. Ладушки и пальчиковые игры", "Голос теплее хлопка")
+    picture(s, 13, Inches(0.4), Inches(1.15), Inches(6.8), Inches(4.8))
     table(
-        s, Inches(0.45), Inches(1.35), Inches(12.4),
+        s, Inches(7.4), Inches(1.15), Inches(5.5),
         [
             ["Хорошо", "Плохо"],
             ["голос слышнее хлопка", "хлопки глушат слово"],
             ["темп удобен малышу", "гонка «успеть всё»"],
             ["2–3 повтора", "долбить до отказа"],
-            ["пауза посмотреть в глаза", "лицо в сторону / в телефон"],
+            ["пауза — взгляд", "лицо в телефон"],
         ],
-        [Inches(6.2), Inches(6.2)],
-        row_h=0.55,
+        [Inches(2.7), Inches(2.8)],
+        row_h=0.5,
     )
-    rounded(s, Inches(0.5), Inches(4.4), Inches(12.3), Inches(1.8), SAND)
-    add_textbox(s, Inches(0.8), Inches(4.7), Inches(11.7), Inches(0.4), "потешка  →  жест на ударных слогах  →  повтор  →  взгляд-пауза", size=18, bold=True, color=TEAL_DEEP, align=PP_ALIGN.CENTER)
-    add_textbox(s, Inches(0.8), Inches(5.4), Inches(11.7), Inches(0.4), "Не требовать идеального попадания ладошек.", size=14, color=MUTED, align=PP_ALIGN.CENTER, font="Calibri")
+    add_textbox(s, Inches(7.4), Inches(4.5), Inches(5.5), Inches(1.5), "потешка → жест на ударных\n→ повтор → взгляд-пауза\n\nНе требовать идеальных ладошек.", size=14, bold=True, color=TEAL_DEEP)
     footer(s, 13)
 
-    # ---- 14 ROCKING ----
+    # ---- 14 ----
     s = prs.slides.add_slide(blank)
     bg(s)
     title_block(s, "Практика 3. Покачивания под музыку", "Медленный пульс и мягкий контраст")
+    picture(s, 14, Inches(0.4), Inches(1.15), Inches(7.0), Inches(5.0))
     table(
-        s, Inches(0.45), Inches(1.4), Inches(12.4),
+        s, Inches(7.6), Inches(1.15), Inches(5.3),
         [
             ["Вариант", "Содержание"],
             ["На руках", "колыбельная"],
             ["На коленях", "«кач-кач»"],
-            ["Лёжа (модель)", "лёгкое ведение без резкости"],
-            ["Контраст", "20 сек спокойно → 10 сек чуть бодрее → снова спокойно"],
+            ["Лёжа", "мягкое ведение"],
+            ["Контраст", "20с → 10с бодрее → покой"],
         ],
-        [Inches(3.2), Inches(9.2)],
+        [Inches(2.0), Inches(3.3)],
         row_h=0.55,
     )
-    add_textbox(s, Inches(0.5), Inches(5.0), Inches(12), Inches(0.4), "спокойный пульс  →  короткий контраст  →  возврат к спокойствию", size=18, bold=True, color=TEAL_DEEP, align=PP_ALIGN.CENTER)
-    add_textbox(s, Inches(0.5), Inches(5.7), Inches(12), Inches(0.4), "«Бодрее» ≠ «громко». Маятник-качание — визуальный якорь слайда.", size=14, color=MUTED, align=PP_ALIGN.CENTER, font="Calibri")
+    add_textbox(s, Inches(7.6), Inches(4.6), Inches(5.3), Inches(1.4), "спокойный пульс → короткий\nконтраст → возврат к покою\n\n«Бодрее» ≠ «громко».", size=14, bold=True, color=TEAL_DEEP)
     footer(s, 14)
 
-    # ---- 15 RATTLE ----
+    # ---- 15 ----
     s = prs.slides.add_slide(blank)
     bg(s)
     title_block(s, "Практика 4. Погремушка и звуковые контрасты", "Учить тишине так же, как звуку")
+    picture(s, 15, Inches(0.4), Inches(1.15), Inches(6.8), Inches(4.8))
     table(
-        s, Inches(0.45), Inches(1.3), Inches(7.5),
+        s, Inches(7.4), Inches(1.15), Inches(5.5),
         [
             ["Шаг", "Действие"],
             ["1", "показать лицом и голосом"],
-            ["2", "тихо потрясти в ритме слогов"],
+            ["2", "тихо потрясти в ритме"],
             ["3", "«погремушка спит»"],
-            ["4", "снова короткий звук → сон"],
+            ["4", "короткий звук → сон"],
             ["5", "вместе слегка потрясти"],
         ],
-        [Inches(1.0), Inches(6.5)],
-        row_h=0.48,
+        [Inches(1.0), Inches(4.5)],
+        row_h=0.45,
     )
-    card(s, Inches(8.2), Inches(1.3), Inches(4.6), Inches(2.4), LEAF, "Можно", ["мягкий контраст 2 качеств", "3–5 коротких смен", "стоп при переутомлении"])
-    card(s, Inches(8.2), Inches(3.9), Inches(4.6), Inches(2.2), RED_SOFT, "Нельзя", ["крик / хлопок у уха", "длинная «дискотека»", "«ещё разок» через силу"])
+    card(s, Inches(7.4), Inches(4.6), Inches(2.6), Inches(1.7), LEAF, "Можно", ["3–5 коротких смен", "стоп при усталости"])
+    card(s, Inches(10.2), Inches(4.6), Inches(2.7), Inches(1.7), RED_SOFT, "Нельзя", ["крик у уха", "дискотека"])
     footer(s, 15)
 
-    # ---- 16 MINI-TRAINING ----
+    # ---- 16 ----
     s = prs.slides.add_slide(blank)
     bg(s)
     title_block(s, "Мини-тренинг студента", "60–70 секунд мягкого ритуала")
+    picture(s, 16, Inches(0.4), Inches(1.15), Inches(7.0), Inches(5.0))
     table(
-        s, Inches(0.45), Inches(1.3), Inches(7.0),
+        s, Inches(7.6), Inches(1.15), Inches(5.3),
         [
             ["Шаг", "Действие"],
-            ["1", "выбрать форму (руки / ладушки / качание / погремушка)"],
-            ["2", "одна потешка или напев"],
-            ["3", "начало → повтор → мягкий стоп"],
-            ["4", "одно «можно» и одно «нельзя»"],
+            ["1", "выбрать форму"],
+            ["2", "одна потешка / напев"],
+            ["3", "начало → повтор → стоп"],
+            ["4", "можно + нельзя"],
         ],
-        [Inches(1.0), Inches(6.0)],
-        row_h=0.55,
+        [Inches(1.0), Inches(4.3)],
+        row_h=0.48,
     )
-    card(s, Inches(7.7), Inches(1.3), Inches(5.1), Inches(4.5), TEAL, "Рубрика Да/Нет", [
-        "Контакт лица и голоса",
-        "Движения мягкие",
-        "Длительность короткая",
-        "Есть пауза / стоп",
-        "Нет резкости и «танца по правилам»",
-        "Понятно, зачем младенцу",
+    card(s, Inches(7.6), Inches(4.0), Inches(5.3), Inches(2.3), TEAL, "Рубрика Да/Нет", [
+        "контакт · мягкость · краткость",
+        "пауза · без резкости",
+        "понятно, зачем младенцу",
     ])
     footer(s, 16)
 
-    # ---- 17 CHECKLIST ----
+    # ---- 17 ----
     s = prs.slides.add_slide(blank)
     bg(s)
-    title_block(s, "Чек-лист работы с 0–1,5 лет", "Перед тем как идти к возрасту 1,5–3")
+    title_block(s, "Чек-лист работы с 0–1,5 лет", "Перед возрастом 1,5–3")
+    picture(s, 17, Inches(0.4), Inches(1.15), Inches(6.5), Inches(5.0))
     checks = [
-        "1. Понимаю: сенсомоторика и контакт, не номер?",
-        "2. Умею читать реакцию на интонацию?",
-        "3. Различаю колыбельную, потешку, пестушку?",
-        "4. Двигаюсь вместе, не тащу?",
-        "5. Держу взгляд, голос, касание?",
-        "6. Могу провести ладушки / покачивание мягко?",
-        "7. Учу погремушку со «сном» и тишиной?",
-        "8. Останавливаюсь при переутомлении?",
+        "1. Сенсомоторика и контакт, не номер",
+        "2. Читаю реакцию на интонацию",
+        "3. Различаю жанры",
+        "4. Вместе, не тащу",
+        "5. Взгляд, голос, касание",
+        "6. Ладушки / качание мягко",
+        "7. Погремушка со «сном»",
+        "8. Стоп при переутомлении",
     ]
     for i, t in enumerate(checks):
-        col = i // 4
-        row = i % 4
-        rounded(s, Inches(0.45 + col * 6.4), Inches(1.35 + row * 1.0), Inches(6.1), Inches(0.85), SOFT if i % 2 == 0 else SAND)
-        add_textbox(s, Inches(0.7 + col * 6.4), Inches(1.55 + row * 1.0), Inches(5.7), Inches(0.5), t, size=14, color=INK, font="Calibri")
-    add_textbox(s, Inches(0.5), Inches(5.7), Inches(12), Inches(0.5), "ГОЛОС   ↔   КАСАНИЕ   ↔   ПАУЗА", size=22, bold=True, color=TEAL_DEEP, align=PP_ALIGN.CENTER)
+        y = Inches(1.2 + i * 0.55)
+        rounded(s, Inches(7.1), y, Inches(5.8), Inches(0.48), SOFT if i % 2 == 0 else SAND)
+        add_textbox(s, Inches(7.3), y + Inches(0.08), Inches(5.4), Inches(0.35), t, size=13, color=INK, font="Calibri")
+    add_textbox(s, Inches(0.5), Inches(6.3), Inches(12), Inches(0.4), "ГОЛОС  ↔  КАСАНИЕ  ↔  ПАУЗА", size=18, bold=True, color=TEAL_DEEP, align=PP_ALIGN.CENTER)
     footer(s, 17)
 
-    # ---- 18 SUMMARY ----
+    # ---- 18 ----
     s = prs.slides.add_slide(blank)
     bg(s, TEAL_DEEP)
-    oval(s, Inches(-0.6), Inches(-0.8), Inches(2.8), Inches(2.8), TEAL)
-    oval(s, Inches(11.2), Inches(5.2), Inches(2.8), Inches(2.8), CORAL)
-    add_textbox(s, Inches(0.8), Inches(0.5), Inches(11.7), Inches(0.6), "Итог + домашнее задание", size=16, color=GOLD, align=PP_ALIGN.CENTER, font="Calibri")
-    add_textbox(s, Inches(0.8), Inches(1.1), Inches(11.7), Inches(0.7), "Ритм начинается с тёплого взрослого", size=30, bold=True, color=WHITE, align=PP_ALIGN.CENTER)
-    add_textbox(
-        s, Inches(1.5), Inches(2.0), Inches(10.3), Inches(1.0),
-        "Мягкий голос.  Короткая форма.  Право на паузу.\nТогда ритм младенца растёт правильно.",
-        size=18, color=SAND, align=PP_ALIGN.CENTER, font="Calibri",
-    )
-    # homework as three light cards
+    oval(s, Inches(-0.5), Inches(-0.6), Inches(2.5), Inches(2.5), TEAL)
+    oval(s, Inches(11.5), Inches(5.5), Inches(2.5), Inches(2.5), CORAL)
+    add_textbox(s, Inches(0.5), Inches(0.3), Inches(6.0), Inches(0.35), "Итог + домашнее задание", size=14, color=GOLD, font="Calibri")
+    add_textbox(s, Inches(0.5), Inches(0.75), Inches(6.0), Inches(0.7), "Ритм начинается\nс тёплого взрослого", size=26, bold=True, color=WHITE)
+    add_textbox(s, Inches(0.5), Inches(1.7), Inches(6.0), Inches(0.8), "Мягкий голос.\nКороткая форма.\nПраво на паузу.", size=16, color=SAND, font="Calibri")
+    picture(s, 18, Inches(6.8), Inches(0.4), Inches(6.1), Inches(4.0))
     hw = [
-        ("1. Таблица на 1 стр.", "слух · двигательный ответ\nроль взрослого · 2 примера\nможно / нельзя"),
-        ("2. Ритуал 2–3 мин", "покачивание + потешка\n+ погремушка с тишиной\n(для 8–12 мес.)"),
+        ("1. Таблица", "слух · ответ · роль\nпримеры · можно/нельзя"),
+        ("2. Ритуал 2–3 мин", "качание + потешка\n+ погремушка (8–12 мес.)"),
         ("3. Мини-эссе", "почему контакт важнее\nидеального жеста"),
     ]
     for i, (t, b) in enumerate(hw):
-        rounded(s, Inches(0.7 + i * 4.15), Inches(3.4), Inches(3.9), Inches(2.4), WHITE)
-        add_textbox(s, Inches(0.9 + i * 4.15), Inches(3.55), Inches(3.5), Inches(0.4), t, size=15, bold=True, color=TEAL_DEEP)
-        add_lines(s, Inches(0.9 + i * 4.15), Inches(4.1), Inches(3.5), Inches(1.5), b.split("\n"), size=13, color=INK, spacing=4)
-    add_textbox(s, Inches(0.8), Inches(6.2), Inches(11.7), Inches(0.4), "Сохраните мягкость — и ритмическое развитие начнётся с правильного этажа.", size=14, color=GOLD, align=PP_ALIGN.CENTER, font="Calibri")
-    add_textbox(s, Inches(0.8), Inches(6.7), Inches(11.7), Inches(0.3), "Бабаджан · Ветлугина · Картушина", size=12, color=SAND, align=PP_ALIGN.CENTER, font="Calibri")
+        rounded(s, Inches(0.4 + i * 4.25), Inches(4.7), Inches(4.0), Inches(1.7), WHITE)
+        add_textbox(s, Inches(0.55 + i * 4.25), Inches(4.85), Inches(3.7), Inches(0.35), t, size=14, bold=True, color=TEAL_DEEP)
+        add_lines(s, Inches(0.55 + i * 4.25), Inches(5.3), Inches(3.7), Inches(0.9), b.split("\n"), size=12, color=INK, spacing=2)
+    add_textbox(s, Inches(0.5), Inches(6.7), Inches(12), Inches(0.3), "Сохраните мягкость — и ритмическое развитие начнётся с правильного этажа.", size=13, color=GOLD, align=PP_ALIGN.CENTER, font="Calibri")
 
     prs.save(str(OUT))
     ART.parent.mkdir(parents=True, exist_ok=True)
     prs.save(str(ART))
-    print(f"OK pptx={OUT}")
+    print(f"OK pptx={OUT} images={len(IMG)}")
 
 
 if __name__ == "__main__":

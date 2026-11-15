@@ -1,0 +1,351 @@
+#!/usr/bin/env python3
+"""Ready-to-show PowerPoint for musical song-fairy tales."""
+
+from pathlib import Path
+
+from pptx import Presentation
+from pptx.dml.color import RGBColor
+from pptx.enum.shapes import MSO_SHAPE
+from pptx.enum.text import MSO_ANCHOR, PP_ALIGN
+from pptx.util import Inches, Pt
+
+INK = RGBColor(0x1E, 0x2F, 0x3A)
+CREAM = RGBColor(0xF7, 0xFA, 0xFC)
+SAND = RGBColor(0xE8, 0xF0, 0xF4)
+TEAL = RGBColor(0x2A, 0x7A, 0x8C)
+TEAL_DEEP = RGBColor(0x1A, 0x5A, 0x6A)
+CORAL = RGBColor(0xD4, 0x7A, 0x6A)
+GOLD = RGBColor(0xC9, 0xA2, 0x4E)
+LEAF = RGBColor(0x5A, 0x8F, 0x7B)
+WHITE = RGBColor(0xFF, 0xFF, 0xFF)
+MUTED = RGBColor(0x5A, 0x6E, 0x78)
+SOFT = RGBColor(0xE4, 0xF0, 0xF3)
+RED_SOFT = RGBColor(0xC4, 0x5C, 0x5C)
+GREEN_SOFT = RGBColor(0x4A, 0x9A, 0x7A)
+
+ROOT = Path(__file__).resolve().parent
+ASSETS = ROOT / "zanyatie-23-assets"
+OUT = ROOT / "zanyatie-23-prezentaciya.pptx"
+ART = Path("/opt/cursor/artifacts/zanyatie-23-prezentaciya.pptx")
+
+IMG = {
+    1: "z23-01-title.jpg",
+    2: "z23-02-forms.jpg",
+    3: "z23-03-goal.jpg",
+    4: "z23-04-types.jpg",
+    5: "z23-05-bridge.jpg",
+    6: "z23-06-steps.jpg",
+    7: "z23-07-exercises.jpg",
+    8: "z23-08-analysis.jpg",
+    9: "z23-09-props.jpg",
+    10: "z23-10-puppet.jpg",
+    11: "z23-11-lab.jpg",
+    12: "z23-12-finale.jpg",
+}
+
+
+def set_run(p, text, *, size=18, bold=False, color=INK, font="Georgia"):
+    run = p.add_run()
+    run.text = text
+    run.font.size = Pt(size)
+    run.font.bold = bold
+    run.font.color.rgb = color
+    run.font.name = font
+    return run
+
+
+def add_textbox(slide, left, top, width, height, text, *, size=18, bold=False, color=INK, align=PP_ALIGN.LEFT, font="Georgia"):
+    box = slide.shapes.add_textbox(left, top, width, height)
+    tf = box.text_frame
+    tf.word_wrap = True
+    p = tf.paragraphs[0]
+    p.alignment = align
+    set_run(p, text, size=size, bold=bold, color=color, font=font)
+    return box
+
+
+def add_lines(slide, left, top, width, height, lines, *, size=14, color=INK, spacing=4):
+    box = slide.shapes.add_textbox(left, top, width, height)
+    tf = box.text_frame
+    tf.word_wrap = True
+    for i, line in enumerate(lines):
+        p = tf.paragraphs[0] if i == 0 else tf.add_paragraph()
+        p.alignment = PP_ALIGN.LEFT
+        p.space_after = Pt(spacing)
+        set_run(p, line, size=size, color=color)
+    return box
+
+
+def fill_shape(shape, color):
+    shape.fill.solid()
+    shape.fill.fore_color.rgb = color
+    shape.line.fill.background()
+
+
+def rounded(slide, left, top, width, height, color):
+    sh = slide.shapes.add_shape(MSO_SHAPE.ROUNDED_RECTANGLE, left, top, width, height)
+    fill_shape(sh, color)
+    return sh
+
+
+def oval(slide, left, top, width, height, color):
+    sh = slide.shapes.add_shape(MSO_SHAPE.OVAL, left, top, width, height)
+    fill_shape(sh, color)
+    return sh
+
+
+def rect(slide, left, top, width, height, color):
+    sh = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, left, top, width, height)
+    fill_shape(sh, color)
+    return sh
+
+
+def bg(slide, color=CREAM):
+    fill = slide.background.fill
+    fill.solid()
+    fill.fore_color.rgb = color
+
+
+def footer(slide, n, total=12):
+    add_textbox(
+        slide, Inches(0.4), Inches(7.15), Inches(12), Inches(0.3),
+        f"Музыкальные песни-сказки · Пение · Образ · Кукла · Пауза   {n}/{total}",
+        size=11, color=MUTED, font="Calibri",
+    )
+
+
+def accent_bar(slide):
+    rect(slide, Inches(0), Inches(0), Inches(0.18), Inches(7.5), TEAL)
+
+
+def title_block(slide, title, subtitle=None):
+    accent_bar(slide)
+    add_textbox(slide, Inches(0.45), Inches(0.18), Inches(12.5), Inches(0.55), title, size=24, bold=True, color=TEAL_DEEP)
+    if subtitle:
+        add_textbox(slide, Inches(0.45), Inches(0.72), Inches(12.5), Inches(0.32), subtitle, size=14, color=MUTED, font="Calibri")
+
+
+def picture(slide, n, left, top, width, height):
+    return slide.shapes.add_picture(str(ASSETS / IMG[n]), left, top, width=width, height=height)
+
+
+def table(slide, left, top, width, rows, col_widths, *, row_h=0.38):
+    cols = len(rows[0])
+    shape = slide.shapes.add_table(len(rows), cols, left, top, width, Inches(row_h * len(rows)))
+    tbl = shape.table
+    for i, w in enumerate(col_widths):
+        tbl.columns[i].width = w
+    for r, row in enumerate(rows):
+        for c, val in enumerate(row):
+            cell = tbl.cell(r, c)
+            cell.text = ""
+            p = cell.text_frame.paragraphs[0]
+            p.alignment = PP_ALIGN.LEFT
+            set_run(p, val, size=11 if r else 12, bold=(r == 0), color=WHITE if r == 0 else INK, font="Calibri")
+            cell.vertical_anchor = MSO_ANCHOR.MIDDLE
+            fill = cell.fill
+            fill.solid()
+            fill.fore_color.rgb = TEAL if r == 0 else (SOFT if r % 2 else WHITE)
+    return shape
+
+
+def card(slide, left, top, width, height, fill, title, body_lines):
+    rounded(slide, left, top, width, height, fill)
+    add_textbox(slide, left + Inches(0.15), top + Inches(0.1), width - Inches(0.25), Inches(0.35), title, size=14, bold=True, color=WHITE)
+    add_lines(slide, left + Inches(0.15), top + Inches(0.45), width - Inches(0.25), height - Inches(0.55), body_lines, size=12, color=WHITE, spacing=3)
+
+
+def build():
+    prs = Presentation()
+    prs.slide_width = Inches(13.333)
+    prs.slide_height = Inches(7.5)
+    blank = prs.slide_layouts[6]
+
+    s = prs.slides.add_slide(blank)
+    bg(s, TEAL_DEEP)
+    oval(s, Inches(-0.8), Inches(-1.0), Inches(3.0), Inches(3.0), TEAL)
+    oval(s, Inches(11.2), Inches(5.2), Inches(2.8), Inches(2.8), CORAL)
+    add_textbox(s, Inches(0.5), Inches(0.35), Inches(6.2), Inches(0.35), "ДОШКОЛЬНЫЙ ВОЗРАСТ", size=13, color=GOLD, font="Calibri")
+    add_textbox(s, Inches(0.5), Inches(0.85), Inches(6.2), Inches(1.6), "Музыкальные\nпесни-сказки", size=30, bold=True, color=WHITE)
+    add_textbox(s, Inches(0.5), Inches(2.8), Inches(6.2), Inches(0.55), "Короткая, посильная, добрая песенная сказка", size=13, color=SAND, font="Calibri")
+    add_textbox(s, Inches(0.5), Inches(3.4), Inches(6.2), Inches(1.1), "мягкое пение → ясный образ →\n1 кукла / жест → короткий сюжет → пауза", size=14, color=WHITE, font="Calibri")
+    picture(s, 1, Inches(7.0), Inches(0.6), Inches(5.8), Inches(5.5))
+    add_textbox(s, Inches(0.5), Inches(6.5), Inches(12), Inches(0.3), "Ветлугина · Радынова · Метлов · «Ладушки» · театрализация в ДОУ", size=12, color=SAND, font="Calibri")
+
+    s = prs.slides.add_slide(blank)
+    bg(s)
+    title_block(s, "Песня, игра или песня-сказка?", "Чем отличается")
+    picture(s, 2, Inches(0.45), Inches(1.2), Inches(6.6), Inches(4.8))
+    table(s, Inches(7.3), Inches(1.2), Inches(5.5), [
+        ["Форма", "Отличие"],
+        ["Обычная песня", "без сюжета/ролей"],
+        ["Игра-песня", "правило, не всегда сказка"],
+        ["Театр", "длиннее, больше реквизита"],
+        ["Песня-сказка", "короткая + образ"],
+    ], [Inches(2.5), Inches(3.0)], row_h=0.55)
+    add_textbox(s, Inches(7.3), Inches(5.1), Inches(5.5), Inches(1.0), "Голос главный.\nКукла — опора.", size=15, bold=True, color=TEAL_DEEP)
+    footer(s, 2)
+
+    s = prs.slides.add_slide(blank)
+    bg(s)
+    title_block(s, "Чему учимся сегодня", "Цель и продукт")
+    steps = ["Понятие и виды", "Влияние на развитие", "Разучивание", "Анализ образов", "Реквизит и куклы", "Мини-показ"]
+    for i, t in enumerate(steps):
+        y = Inches(1.2 + i * 0.7)
+        oval(s, Inches(0.5), y, Inches(0.45), Inches(0.45), TEAL if i % 2 == 0 else LEAF)
+        add_textbox(s, Inches(0.5), y + Inches(0.07), Inches(0.45), Inches(0.3), str(i + 1), size=13, bold=True, color=WHITE, align=PP_ALIGN.CENTER, font="Calibri")
+        add_textbox(s, Inches(1.15), y + Inches(0.07), Inches(5.8), Inches(0.4), t, size=15, color=INK)
+    picture(s, 3, Inches(7.3), Inches(1.2), Inches(5.5), Inches(5.2))
+    footer(s, 3)
+
+    s = prs.slides.add_slide(blank)
+    bg(s)
+    title_block(s, "Виды песен-сказок", "Шесть рабочих видов")
+    picture(s, 4, Inches(0.4), Inches(1.15), Inches(6.8), Inches(4.5))
+    table(s, Inches(7.4), Inches(1.15), Inches(5.5), [
+        ["Вид", "Суть"],
+        ["Один герой", "становимся героем"],
+        ["Диалог", "реплики по очереди"],
+        ["Цепочка", "герои добавляются"],
+        ["Событие", "короткий сюжет"],
+        ["Хоровод", "круг + сюжет"],
+        ["Кукольная", "образ — кукла"],
+    ], [Inches(2.3), Inches(3.2)], row_h=0.48)
+    footer(s, 4)
+
+    s = prs.slides.add_slide(blank)
+    bg(s)
+    title_block(s, "Влияние на развитие", "Музыка · речь · общение")
+    picture(s, 5, Inches(0.4), Inches(1.15), Inches(6.6), Inches(4.6))
+    table(s, Inches(7.2), Inches(1.15), Inches(5.7), [
+        ["Сфера", "Что развивается"],
+        ["Музыкальное", "характер, фраза"],
+        ["Речевое", "словарь, диалог"],
+        ["Социальное", "роли, эмпатия"],
+        ["Эмоции", "образ без страха"],
+        ["Внимание", "порядок событий"],
+    ], [Inches(2.3), Inches(3.4)], row_h=0.48)
+    footer(s, 5)
+
+    s = prs.slides.add_slide(blank)
+    bg(s)
+    title_block(s, "Этапы разучивания", "Как разучивать песню-сказку")
+    picture(s, 6, Inches(0.4), Inches(1.15), Inches(7.0), Inches(5.0))
+    table(s, Inches(7.6), Inches(1.15), Inches(5.3), [
+        ["Этап", "Действие"],
+        ["Интерес", "кукла / вопрос"],
+        ["Слушание", "сюжет целиком"],
+        ["Образы", "характер героя"],
+        ["Фразы", "1–2 строки"],
+        ["Роль", "мягкий голос"],
+        ["Действие", "жест / кукла"],
+        ["Стоп", "пауза"],
+    ], [Inches(2.1), Inches(3.2)], row_h=0.42)
+    footer(s, 6)
+
+    s = prs.slides.add_slide(blank)
+    bg(s)
+    title_block(s, "Творческие упражнения", "Банк коротких заданий")
+    picture(s, 7, Inches(0.4), Inches(1.15), Inches(7.0), Inches(5.0))
+    table(s, Inches(7.6), Inches(1.15), Inches(5.3), [
+        ["Упражнение", "Задача"],
+        ["Голос героя", "без крика"],
+        ["Жест-подпись", "1 жест"],
+        ["Эхо-сказки", "в характере"],
+        ["Кто говорит?", "угадать"],
+        ["Тихое волшебство", "тише, не громче"],
+        ["Очередь ролей", "смена 20–30 сек"],
+    ], [Inches(2.6), Inches(2.7)], row_h=0.48)
+    footer(s, 7)
+
+    s = prs.slides.add_slide(blank)
+    bg(s)
+    title_block(s, "Анализ музыкальных образов", "Карточка образа")
+    picture(s, 8, Inches(0.4), Inches(1.15), Inches(7.0), Inches(5.0))
+    add_lines(s, Inches(7.6), Inches(1.3), Inches(5.2), Inches(5.0), [
+        "Кто герой?",
+        "Характер музыки",
+        "Темп и динамика",
+        "Жест / движение",
+        "Речевая краска",
+        "Роль куклы",
+        "Риск",
+        "",
+        "зайка — медведь",
+        "добрый — хитрый",
+        "контраст жестом, не криком",
+    ], size=14, color=TEAL_DEEP)
+    footer(s, 8)
+
+    s = prs.slides.add_slide(blank)
+    bg(s)
+    title_block(s, "Реквизит: можно и нельзя", "Чемоданчик сказки")
+    picture(s, 9, Inches(0.4), Inches(1.15), Inches(5.8), Inches(5.2))
+    card(s, Inches(6.5), Inches(1.2), Inches(3.2), Inches(4.6), GREEN_SOFT, "Беру ✓", [
+        "1–3 предмета", "видимая кукла",
+        "безопасно надеть", "связано с героем", "убрать за 5 сек",
+    ])
+    card(s, Inches(9.9), Inches(1.2), Inches(3.0), Inches(4.6), RED_SOFT, "Не беру ✕", [
+        "гора костюмов", "мелкий «для себя»",
+        "мешает петь", "случайный яркий", "сложный монтаж",
+    ])
+    footer(s, 9)
+
+    s = prs.slides.add_slide(blank)
+    bg(s)
+    title_block(s, "Игрушки на руку", "Кукла помогает увидеть героя")
+    picture(s, 10, Inches(0.4), Inches(1.15), Inches(7.0), Inches(5.0))
+    table(s, Inches(7.6), Inches(1.15), Inches(5.3), [
+        ["Задача", "Как"],
+        ["Внимание", "появление до пения"],
+        ["Герой", "поёт с педагогом"],
+        ["Диалог", "вопрос — ответ"],
+        ["Смена роли", "передать"],
+        ["Стоп", "поклон / уход"],
+    ], [Inches(2.0), Inches(3.3)], row_h=0.5)
+    footer(s, 10)
+
+    s = prs.slides.add_slide(blank)
+    bg(s)
+    title_block(s, "Мини-лаборатория", "Показ 60–90 секунд")
+    picture(s, 11, Inches(0.4), Inches(1.15), Inches(7.0), Inches(5.0))
+    table(s, Inches(7.6), Inches(1.15), Inches(5.3), [
+        ["Шаг", "Действие"],
+        ["1", "появление куклы"],
+        ["2", "1–2 фразы"],
+        ["3", "жест / действие"],
+        ["4", "короткий прогон"],
+        ["5", "мягкий стоп"],
+    ], [Inches(1.0), Inches(4.3)], row_h=0.42)
+    card(s, Inches(7.6), Inches(4.5), Inches(5.3), Inches(1.8), TEAL, "Рубрика Да/Нет", [
+        "кукла помогает · песня слышна", "нет хаоса · убрать быстро · мягко",
+    ])
+    footer(s, 11)
+
+    s = prs.slides.add_slide(blank)
+    bg(s, TEAL_DEEP)
+    oval(s, Inches(-0.5), Inches(-0.6), Inches(2.5), Inches(2.5), TEAL)
+    oval(s, Inches(11.5), Inches(5.5), Inches(2.5), Inches(2.5), CORAL)
+    add_textbox(s, Inches(0.5), Inches(0.28), Inches(6.0), Inches(0.35), "Итог + творческие задания", size=14, color=GOLD, font="Calibri")
+    add_textbox(s, Inches(0.5), Inches(0.7), Inches(6.0), Inches(1.0), "Формула\nпесни-сказки", size=26, bold=True, color=WHITE)
+    add_textbox(s, Inches(0.5), Inches(1.9), Inches(6.0), Inches(1.5), "Мягкое пение.\nЯсный образ.\n1 кукла / жест.\nКороткий сюжет.\nПауза.", size=14, color=SAND, font="Calibri")
+    picture(s, 12, Inches(6.8), Inches(0.35), Inches(6.1), Inches(4.0))
+    hw = [
+        ("1. Таблица + разбор", "виды · этапы · реквизит\nгерои и 2 упражнения"),
+        ("2. Эссе + сценарий", "не начинать со спектакля\nкукла → фразы → стоп"),
+        ("3. Картотека", "6 позиций\nс предостережением"),
+    ]
+    for i, (t, b) in enumerate(hw):
+        rounded(s, Inches(0.4 + i * 4.25), Inches(4.7), Inches(4.0), Inches(1.7), WHITE)
+        add_textbox(s, Inches(0.55 + i * 4.25), Inches(4.85), Inches(3.7), Inches(0.35), t, size=14, bold=True, color=TEAL_DEEP)
+        add_lines(s, Inches(0.55 + i * 4.25), Inches(5.3), Inches(3.7), Inches(0.9), b.split("\n"), size=12, color=INK, spacing=2)
+    add_textbox(s, Inches(0.5), Inches(6.7), Inches(12), Inches(0.3), "Сказка начинается с мягкого пения — не с декораций.", size=13, color=GOLD, align=PP_ALIGN.CENTER, font="Calibri")
+
+    prs.save(str(OUT))
+    ART.parent.mkdir(parents=True, exist_ok=True)
+    prs.save(str(ART))
+    print(f"OK pptx={OUT} images={len(IMG)}")
+
+
+if __name__ == "__main__":
+    build()

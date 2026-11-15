@@ -1,7 +1,7 @@
-"""Поиск и скачивание публичного аудио через yt-dlp.
+"""Поиск и скачивание полного публичного трека через yt-dlp.
 
-Платный, приватный и защищённый DRM контент не скачивается.
-Обход геоограничений и DRM выключен.
+Сначала YouTube, затем SoundCloud. Платный, приватный и защищённый DRM
+контент не скачивается. Фрагменты и превью не отправляются.
 """
 
 from __future__ import annotations
@@ -11,6 +11,7 @@ import logging
 import os
 import re
 import shutil
+import subprocess
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
@@ -19,12 +20,11 @@ from dotenv import load_dotenv
 
 logger = logging.getLogger("music_bot.downloader")
 
-# Опциональный файл cookies. Оставьте переменную закомментированной в .env.
-# Раскомментируйте COOKIES_FILE только для публичных страниц, которые просят
-# подтвердить браузер. Не используйте cookies для платного или закрытого контента.
-# COOKIES_FILE=
+# Необязательный файл cookies для публичных роликов YouTube.
+# Оставьте YT_COOKIES закомментированным в .env.
+# Не используйте cookies для платного или закрытого контента.
+# YT_COOKIES=
 
-_MAX_TRACKS = 5
 _FIELD_LIMIT = 64
 _FILENAME_LIMIT = 80
 _BLOCKED_AVAILABILITY = {
@@ -37,6 +37,8 @@ _LIVE_REJECTION = (
     "Это прямой эфир или премьера, а не готовая запись. "
     "Пришлите уже опубликованный трек."
 )
+_FRAGMENT_REJECTION = "Это фрагмент, а не полный трек. Нужна полная публичная запись."
+_TOO_BIG = "Трек слишком большой для Telegram. Попробуйте другой результат."
 _PLAYLIST_SEGMENTS = {"playlist", "playlists", "album", "albums", "sets"}
 _INVALID_FILENAME = re.compile(r'[<>:"/\\|?*\x00-\x1f]')
 
@@ -45,67 +47,39 @@ class DownloadError(Exception):
     """Ошибка, текст которой можно показать пользователю."""
 
 
-def search_youtube(query: str) -> list[dict]:
-    """Ищет до 5 роликов на YouTube через ytsearch5.
+def search_youtube(query: str, limit: int = 5) -> list[dict]:
+    """Ищет до limit роликов на YouTube через ytsearch.
 
-    Каждый результат: title, url, duration, uploader.
+    Каждый результат: title, url, duration, uploader, source.
     """
-    cleaned = " ".join(query.split())
-    if not cleaned:
-        return []
-    if len(cleaned) > 300:
-        cleaned = cleaned[:300]
+    return _search(query, limit=limit, source="youtube")
 
-    options = _common_options()
-    options.update(
-        {
-            "skip_download": True,
-            "extract_flat": True,
-            "noplaylist": True,
-            "playlistend": _MAX_TRACKS,
-        }
-    )
-    info = _extract(f"ytsearch5:{cleaned}", options, download=False)
-    results: list[dict] = []
-    for entry in _entries(info):
-        url = _entry_url(entry, source="https://www.youtube.com/watch")
-        if not url:
-            continue
-        results.append(
-            {
-                "title": _clip_field(entry.get("title"), "Без названия", limit=200),
-                "url": url,
-                "duration": _duration_seconds(entry.get("duration")),
-                "uploader": _optional_text(
-                    entry.get("uploader") or entry.get("channel") or entry.get("artist")
-                ),
-            }
-        )
-        if len(results) >= _MAX_TRACKS:
-            break
-    logger.info("Поиск %r: %s результатов", cleaned, len(results))
-    return results
+
+def search_soundcloud(query: str, limit: int = 5) -> list[dict]:
+    """Ищет до limit треков на SoundCloud. source всегда \"soundcloud\"."""
+    return _search(query, limit=limit, source="soundcloud")
 
 
 def download_audio(url: str, output_dir: str) -> tuple[str, dict]:
-    """Скачивает один публичный ролик и конвертирует его в MP3 192 kbps.
+    """Скачивает один полный трек и конвертирует его в MP3 192 kbps.
 
-    Возвращает путь к файлу и метаданные ``{title, performer}``.
-    В параметрах yt-dlp стоит ``playlistend: 5``, чтобы плейлист не разрастался,
-    но сама функция сохраняет один трек. Список ссылок плейлиста собирает
-    :func:`resolve_audio_urls`.
+    Формат yt-dlp: bestaudio/best, без привязки к кодеку.
+    noplaylist=True, чтобы одиночное видео не тянуло весь плейлист.
+    Метаданные: {title, performer, duration}.
     """
-    checked = validate_url(url)
+    checked = _supported_url(url)
     _require_ffmpeg()
     output = Path(output_dir)
     output.mkdir(parents=True, exist_ok=True)
 
-    options = _download_options(output)
-    info = _extract(checked, options, download=True)
+    info = _extract(checked, _download_options(output, url=checked), download=True)
     entry = _primary_entry(info)
     rejection = _rejection_reason(entry)
     if rejection:
         raise DownloadError(rejection)
+    if _is_fragment(entry):
+        raise DownloadError(_FRAGMENT_REJECTION)
+
     path = _mp3_from_entry(entry, output) or _mp3_from_entry(info, output)
     if path is None:
         mp3s = sorted(item for item in output.glob("*.mp3") if item.is_file())
@@ -114,47 +88,93 @@ def download_audio(url: str, output_dir: str) -> tuple[str, dict]:
         raise DownloadError("Не удалось получить MP3. Попробуйте другую ссылку.")
     if not _inside(path, output):
         raise DownloadError("Не удалось сохранить файл.")
+    if _file_is_fragment(path, entry):
+        path.unlink(missing_ok=True)
+        raise DownloadError(_FRAGMENT_REJECTION)
 
-    meta = _metadata(entry)
+    meta = _metadata(entry, path)
     final_path = _rename_for_telegram(path, meta, output)
-    logger.info(
-        "Готов MP3 %s (%s байт)",
-        final_path.name,
-        final_path.stat().st_size,
-    )
+    logger.info("Готов MP3 %s (%s байт)", final_path.name, final_path.stat().st_size)
     return str(final_path), meta
 
 
-def resolve_audio_urls(url: str) -> list[str]:
-    """Возвращает одну ссылку или первые 5 треков плейлиста либо альбома."""
-    checked = validate_url(url)
+def ensure_size_limit(path: str, max_mb: int = 45) -> str:
+    """Возвращает путь к MP3 не больше max_mb.
+
+    Если файл больше лимита, исходник удаляется и трек перекодируется
+    в 128 кбит/с без обрезки. Если и после этого он больше лимита,
+    новый файл удаляется и выбрасывается ValueError.
+    """
+    source = Path(path)
+    if not source.is_file():
+        raise ValueError("Не удалось подготовить файл для отправки.")
+    limit = max(max_mb, 1) * 1024 * 1024
+    if source.stat().st_size <= limit:
+        return str(source)
+
+    _require_ffmpeg()
+    smaller = source.with_name(f"{source.stem}-128.mp3")
+    if smaller.resolve() == source.resolve():
+        smaller = source.with_name(f"{source.stem}-128k.mp3")
+    completed = subprocess.run(
+        [
+            "ffmpeg",
+            "-y",
+            "-i",
+            str(source),
+            "-vn",
+            "-codec:a",
+            "libmp3lame",
+            "-b:a",
+            "128k",
+            str(smaller),
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    source.unlink(missing_ok=True)
+    if completed.returncode != 0 or not smaller.is_file() or smaller.stat().st_size <= 0:
+        smaller.unlink(missing_ok=True)
+        logger.info("ffmpeg не смог перекодировать трек в 128 кбит/с")
+        raise ValueError("Не удалось ужать трек до размера, который принимает Telegram.")
+    if smaller.stat().st_size > limit:
+        smaller.unlink(missing_ok=True)
+        raise ValueError(_TOO_BIG)
+    logger.info("Трек перекодирован в 128 кбит/с (%s байт)", smaller.stat().st_size)
+    return str(smaller)
+
+
+def expand_targets(url: str) -> list[str]:
+    """Одна ссылка или первые 5 треков плейлиста YouTube/SoundCloud."""
+    checked = _supported_url(url)
     if not is_playlist_url(checked):
         return [checked]
 
-    options = _common_options()
+    source = detect_source(checked) or "youtube"
+    options = _base_options(youtube=source == "youtube")
     options.update(
         {
             "skip_download": True,
             "extract_flat": True,
             "noplaylist": False,
-            "playlistend": _MAX_TRACKS,
+            "playlistend": 5,
         }
     )
     info = _extract(checked, options, download=False)
     urls: list[str] = []
     for entry in _entries(info):
-        entry_link = _entry_url(entry, source=checked)
-        if not entry_link or is_playlist_url(entry_link):
+        link = _entry_url(entry, source)
+        if not link or is_playlist_url(link) or detect_source(link) is None:
             continue
         try:
-            entry_link = validate_url(entry_link)
+            link = _supported_url(link)
         except DownloadError:
-            logger.info("Пропускаю непубличную ссылку из плейлиста")
             continue
-        if entry_link in urls:
+        if link in urls:
             continue
-        urls.append(entry_link)
-        if len(urls) >= _MAX_TRACKS:
+        urls.append(link)
+        if len(urls) >= 5:
             break
     if not urls:
         raise DownloadError("В плейлисте нет доступных публичных треков.")
@@ -162,46 +182,35 @@ def resolve_audio_urls(url: str) -> list[str]:
     return urls
 
 
-def validate_url(url: str) -> str:
-    raw = url.strip()
-    if len(raw) > 2000:
-        raise DownloadError("Слишком длинная ссылка.")
-    parsed = urlparse(raw)
-    if parsed.scheme not in {"http", "https"} or not parsed.hostname:
-        raise DownloadError(
-            "Нужна публичная ссылка, которая начинается с http:// или https://."
-        )
-    if parsed.username or parsed.password:
-        raise DownloadError(
-            "Ссылка с логином или паролем не подходит. Пришлите публичную ссылку."
-        )
-    host = parsed.hostname.lower().rstrip(".")
-    if (
-        host in {"localhost", "localhost.localdomain"}
-        or host.endswith(".local")
-        or host.endswith(".internal")
-    ):
-        raise DownloadError("Эта ссылка не ведёт на публичный источник.")
+def lookup_title(url: str) -> str | None:
+    """Пытается узнать название без скачивания, чтобы повторить поиск."""
     try:
-        ip = ipaddress.ip_address(host)
-    except ValueError:
-        ip = None
-    if ip is not None and (
-        ip.is_private
-        or ip.is_loopback
-        or ip.is_link_local
-        or ip.is_reserved
-        or ip.is_multicast
-        or ip.is_unspecified
-    ):
-        raise DownloadError("Эта ссылка не ведёт на публичный источник.")
-    return raw
+        checked = _supported_url(url)
+    except DownloadError:
+        return None
+    source = detect_source(checked) or "youtube"
+    options = _base_options(youtube=source == "youtube")
+    options.update({"skip_download": True, "noplaylist": True})
+    try:
+        info = _extract(checked, options, download=False)
+    except DownloadError:
+        return None
+    title = _optional_text(_primary_entry(info).get("track") or _primary_entry(info).get("title"))
+    return title
+
+
+def detect_source(url: str) -> str | None:
+    host = (urlparse(url).hostname or "").lower().removeprefix("www.")
+    if host == "youtu.be" or host.endswith("youtube.com"):
+        return "youtube"
+    if host.endswith("soundcloud.com"):
+        return "soundcloud"
+    return None
 
 
 def is_playlist_url(url: str) -> bool:
     parsed = urlparse(url)
-    path = parsed.path.lower()
-    segments = [part for part in path.split("/") if part]
+    segments = [part for part in parsed.path.lower().split("/") if part]
     if any(part in _PLAYLIST_SEGMENTS for part in segments):
         return True
     host = (parsed.hostname or "").lower().removeprefix("www.")
@@ -213,17 +222,13 @@ def is_playlist_url(url: str) -> bool:
 
 def explain_failure(exc: BaseException) -> str:
     raw = str(exc)
-    for message in (
-        *_BLOCKED_AVAILABILITY.values(),
-        _LIVE_REJECTION,
-    ):
+    for message in (*_BLOCKED_AVAILABILITY.values(), _LIVE_REJECTION, _FRAGMENT_REJECTION, _TOO_BIG):
         if message in raw:
             return message
-
     text = raw.lower()
     rules: tuple[tuple[tuple[str, ...], str], ...] = (
         (
-            ("premium_only", "paid video", "purchase this", "requires payment"),
+            ("premium_only", "paid video", "purchase this", "requires payment", "premium"),
             _BLOCKED_AVAILABILITY["premium_only"],
         ),
         (
@@ -242,11 +247,7 @@ def explain_failure(exc: BaseException) -> str:
             "Источник временно не отдаёт эту запись без подтверждения браузера. Попробуйте другую ссылку.",
         ),
         (
-            (
-                "confirm your age",
-                "age-restricted",
-                "sign in to confirm your age",
-            ),
+            ("confirm your age", "age-restricted", "sign in to confirm your age"),
             "Это видео с ограничением по возрасту или требует входа. Доступны только открытые записи.",
         ),
         (
@@ -274,31 +275,15 @@ def explain_failure(exc: BaseException) -> str:
         ),
         (
             ("unsupported url",),
-            "Эта ссылка не поддерживается. Пришлите публичную ссылку на ролик или трек.",
+            "Эта ссылка не поддерживается. Пришлите публичную ссылку YouTube или SoundCloud.",
         ),
         (
-            ("is not a valid url", "invalid url"),
-            "Ссылка выглядит некорректно. Пришлите публичный адрес ролика.",
+            ("preview", "snippet", "fragment"),
+            _FRAGMENT_REJECTION,
         ),
         (
             ("drm", "protected content", "widevine"),
             "Этот материал защищён. Я не обхожу защиту.",
-        ),
-        (
-            ("copyright claim", "copyright"),
-            "Правообладатель закрыл доступ к этой записи.",
-        ),
-        (
-            ("http error 404", "404: not found"),
-            "Запись не найдена. Проверьте ссылку.",
-        ),
-        (
-            ("http error 403", "403: forbidden"),
-            "Источник отклонил запрос. Попробуйте другую ссылку.",
-        ),
-        (
-            ("failed to load cookies", "cookie file"),
-            "Не удалось прочитать файл cookies. Проверьте COOKIES_FILE или уберите эту настройку.",
         ),
         (
             ("timed out", "timeout", "unable to download webpage", "network is unreachable"),
@@ -311,15 +296,56 @@ def explain_failure(exc: BaseException) -> str:
     return "Не удалось получить аудио. Попробуйте другую ссылку или другой результат."
 
 
-def _download_options(output: Path) -> dict:
-    options = _common_options()
+def _search(query: str, *, limit: int, source: str) -> list[dict]:
+    cleaned = " ".join(query.split())
+    if not cleaned:
+        return []
+    if len(cleaned) > 300:
+        cleaned = cleaned[:300]
+    bounded = _bounded_limit(limit)
+    prefix = "ytsearch" if source == "youtube" else "scsearch"
+    options = _base_options(youtube=source == "youtube")
+    options.update(
+        {
+            "skip_download": True,
+            "extract_flat": True,
+            "noplaylist": True,
+            "playlistend": bounded,
+        }
+    )
+    info = _extract(f"{prefix}{bounded}:{cleaned}", options, download=False)
+    results: list[dict] = []
+    for entry in _entries(info):
+        if _rejection_reason(entry):
+            continue
+        url = _entry_url(entry, source)
+        if not url or detect_source(url) != source:
+            continue
+        results.append(
+            {
+                "title": _clip_field(entry.get("title"), "Без названия", limit=200),
+                "url": url,
+                "duration": _duration_seconds(entry.get("duration")),
+                "uploader": _optional_text(
+                    entry.get("uploader") or entry.get("channel") or entry.get("artist")
+                ),
+                "source": source,
+            }
+        )
+        if len(results) >= bounded:
+            break
+    logger.info("Поиск %s %r: %s результатов", source, cleaned, len(results))
+    return results
+
+
+def _download_options(output: Path, *, url: str) -> dict:
+    options = _base_options(youtube=detect_source(url) == "youtube")
     options.update(
         {
             "format": "bestaudio/best",
             "outtmpl": str(output / "%(id)s.%(ext)s"),
             "noplaylist": True,
-            "playlistend": _MAX_TRACKS,
-            "max_downloads": _MAX_TRACKS,
+            "max_downloads": 1,
             "keepvideo": False,
             "overwrites": True,
             "postprocessors": [
@@ -335,7 +361,7 @@ def _download_options(output: Path) -> dict:
     return options
 
 
-def _common_options() -> dict:
+def _base_options(*, youtube: bool) -> dict:
     _load_env()
     options = {
         "quiet": True,
@@ -343,26 +369,25 @@ def _common_options() -> dict:
         "noprogress": True,
         "restrictfilenames": True,
         "windowsfilenames": True,
-        # Региональные ограничения не обходим: пользователь получит понятную ошибку.
         "geo_bypass": False,
         "socket_timeout": 30,
         "retries": 2,
         "fragment_retries": 2,
-        "playlistend": _MAX_TRACKS,
     }
-    options.update(_cookies_options())
+    if youtube:
+        options.update(_youtube_cookies())
     return options
 
 
-def _cookies_options() -> dict:
-    raw = os.getenv("COOKIES_FILE", "").strip()
+def _youtube_cookies() -> dict:
+    raw = os.getenv("YT_COOKIES", "").strip()
     if not raw or raw.startswith("#"):
         return {}
     path = Path(raw).expanduser()
     if not path.is_file():
-        logger.warning("COOKIES_FILE задан, но файл не найден")
+        logger.warning("YT_COOKIES задан, но файл не найден")
         return {}
-    logger.info("Используется файл cookies только для публичных страниц")
+    logger.info("Используются cookies YouTube только для публичных роликов")
     return {"cookiefile": str(path)}
 
 
@@ -377,6 +402,36 @@ def _require_ffmpeg() -> None:
         )
 
 
+def _supported_url(url: str) -> str:
+    raw = url.strip()
+    if len(raw) > 2000:
+        raise DownloadError("Слишком длинная ссылка.")
+    parsed = urlparse(raw)
+    if parsed.scheme not in {"http", "https"} or not parsed.hostname:
+        raise DownloadError("Нужна публичная ссылка на YouTube или SoundCloud.")
+    if parsed.username or parsed.password:
+        raise DownloadError("Ссылка с логином или паролем не подходит. Пришлите публичную ссылку.")
+    host = parsed.hostname.lower().rstrip(".")
+    if host in {"localhost", "localhost.localdomain"} or host.endswith((".local", ".internal")):
+        raise DownloadError("Эта ссылка не ведёт на публичный источник.")
+    try:
+        ip = ipaddress.ip_address(host)
+    except ValueError:
+        ip = None
+    if ip is not None and (
+        ip.is_private
+        or ip.is_loopback
+        or ip.is_link_local
+        or ip.is_reserved
+        or ip.is_multicast
+        or ip.is_unspecified
+    ):
+        raise DownloadError("Эта ссылка не ведёт на публичный источник.")
+    if detect_source(raw) is None:
+        raise DownloadError("Нужна публичная ссылка на YouTube или SoundCloud.")
+    return raw
+
+
 def _rejection_reason(info: dict) -> str | None:
     availability = str(info.get("availability") or "").strip().lower()
     if availability in _BLOCKED_AVAILABILITY:
@@ -388,12 +443,78 @@ def _rejection_reason(info: dict) -> str | None:
 
 
 def _public_only(info: dict, incomplete: bool = False) -> str | None:
-    """Останавливает yt-dlp до записи файла, если источник не публичный."""
-    del incomplete
+    """Убирает превью и платные форматы до выбора bestaudio/best."""
     reason = _rejection_reason(info)
     if reason:
         raise DownloadError(reason)
+    # На раннем проходе yt-dlp передаёт incomplete=True, список форматов ещё не полный.
+    if incomplete is True:
+        return None
+    formats = info.get("formats")
+    if not isinstance(formats, list) or not formats:
+        return None
+    kept = [
+        item
+        for item in formats
+        if isinstance(item, dict) and not _format_is_preview(item) and not _format_is_premium(item)
+    ]
+    if not kept:
+        if any(isinstance(item, dict) and _format_is_premium(item) for item in formats):
+            raise DownloadError(_BLOCKED_AVAILABILITY["premium_only"])
+        raise DownloadError(_FRAGMENT_REJECTION)
+    info["formats"] = kept
     return None
+
+
+def _format_is_preview(item: dict) -> bool:
+    format_id = str(item.get("format_id") or "").lower()
+    url = str(item.get("url") or "")
+    note = str(item.get("format_note") or "").lower()
+    return "preview" in format_id or "/preview/" in url or note == "preview"
+
+
+def _format_is_premium(item: dict) -> bool:
+    return str(item.get("format_note") or "").lower() == "premium"
+
+
+def _is_fragment(info: dict) -> bool:
+    """True, если скачанный формат — превью, а не полный трек."""
+    selected: list[dict] = []
+    for key in ("requested_downloads", "requested_formats"):
+        items = info.get(key)
+        if isinstance(items, list):
+            selected.extend(item for item in items if isinstance(item, dict))
+    return any(_format_is_preview(item) for item in selected)
+
+
+def _file_is_fragment(path: Path, entry: dict) -> bool:
+    expected = _duration_seconds(entry.get("duration"))
+    actual = _probe_duration(path)
+    if expected is None or actual is None:
+        return False
+    # Превью SoundCloud обычно около 30 секунд при длинном полном треке.
+    return expected >= 90 and actual <= 35
+
+
+def _probe_duration(path: Path) -> int | None:
+    if shutil.which("ffprobe") is None:
+        return None
+    completed = subprocess.run(
+        [
+            "ffprobe",
+            "-v",
+            "error",
+            "-show_entries",
+            "format=duration",
+            "-of",
+            "default=nw=1:nk=1",
+            str(path),
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    return _duration_seconds(completed.stdout.strip())
 
 
 def _extract(url: str, options: dict, *, download: bool) -> dict:
@@ -403,7 +524,7 @@ def _extract(url: str, options: dict, *, download: bool) -> dict:
     except DownloadError:
         raise
     except Exception as exc:
-        logger.info("yt-dlp не смог обработать %s: %s", url, exc)
+        logger.info("yt-dlp не смог обработать ссылку: %s", exc)
         raise DownloadError(explain_failure(exc)) from exc
     if not isinstance(info, dict):
         raise DownloadError("Не удалось получить аудио. Попробуйте другую ссылку.")
@@ -422,26 +543,17 @@ def _primary_entry(info: dict) -> dict:
     return entries[0] if entries else info
 
 
-def _entry_url(entry: dict, *, source: str) -> str | None:
+def _entry_url(entry: dict, source: str) -> str | None:
     for key in ("webpage_url", "url"):
         value = entry.get(key)
         if isinstance(value, str) and value.startswith(("http://", "https://")):
             return value
-
     video_id = entry.get("id")
     if not isinstance(video_id, str) or not video_id:
         raw_url = entry.get("url")
         if isinstance(raw_url, str) and raw_url and not raw_url.startswith(("http://", "https://")):
             video_id = raw_url
-    if not isinstance(video_id, str) or not video_id:
-        return None
-
-    extractor = " ".join(
-        str(entry.get(key) or "")
-        for key in ("ie_key", "extractor_key", "extractor")
-    ).lower()
-    source_host = (urlparse(source).hostname or "").lower()
-    if "youtube" in extractor or "youtu" in source_host:
+    if source == "youtube" and isinstance(video_id, str) and video_id:
         return f"https://www.youtube.com/watch?v={video_id}"
     return None
 
@@ -461,7 +573,6 @@ def _mp3_from_entry(entry: dict, output: Path) -> Path | None:
         raw = entry.get(key)
         if isinstance(raw, str) and raw:
             candidates.append(Path(raw))
-
     video_id = entry.get("id")
     if isinstance(video_id, str) and video_id:
         candidates.extend(output.glob(f"*{video_id}*.mp3"))
@@ -478,7 +589,7 @@ def _mp3_from_entry(entry: dict, output: Path) -> Path | None:
     return None
 
 
-def _metadata(entry: dict) -> dict:
+def _metadata(entry: dict, path: Path) -> dict:
     title = _clip_field(entry.get("track") or entry.get("title"), "Без названия")
     performer = _clip_field(
         entry.get("artist")
@@ -488,7 +599,8 @@ def _metadata(entry: dict) -> dict:
         or entry.get("channel"),
         "Неизвестный исполнитель",
     )
-    return {"title": title, "performer": performer}
+    duration = _duration_seconds(entry.get("duration")) or _probe_duration(path)
+    return {"title": title, "performer": performer, "duration": duration}
 
 
 def _rename_for_telegram(path: Path, meta: dict, output: Path) -> Path:
@@ -533,13 +645,23 @@ def _optional_text(value: object) -> str | None:
 def _duration_seconds(value: object) -> int | None:
     if value is None or isinstance(value, bool):
         return None
+    if isinstance(value, str):
+        value = value.strip()
     try:
-        seconds = int(value)
+        seconds = int(float(value))
     except (TypeError, ValueError):
         return None
     if seconds < 0:
         return None
     return seconds
+
+
+def _bounded_limit(limit: int) -> int:
+    try:
+        value = int(limit)
+    except (TypeError, ValueError):
+        return 5
+    return min(max(value, 1), 10)
 
 
 def _inside(path: Path, root: Path) -> bool:

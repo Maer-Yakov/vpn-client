@@ -1,4 +1,4 @@
-"""Telegram-бот: ищет публичное аудио и присылает MP3."""
+"""Telegram-бот: ищет полный трек на YouTube, затем на SoundCloud."""
 
 from __future__ import annotations
 
@@ -9,8 +9,6 @@ import re
 import shutil
 import sys
 import tempfile
-import uuid
-from collections import OrderedDict
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -27,41 +25,48 @@ from telegram.ext import (
 
 from downloader import (
     DownloadError,
+    detect_source,
     download_audio,
-    resolve_audio_urls,
+    ensure_size_limit,
+    expand_targets,
+    explain_failure,
+    lookup_title,
+    search_soundcloud,
     search_youtube,
 )
 
 logger = logging.getLogger("music_bot")
 
-# Лимит Telegram Bot API для обычного бота.
-TELEGRAM_AUDIO_LIMIT = 50 * 1024 * 1024
 _URL_RE = re.compile(r"https?://[^\s<>\"]+", re.IGNORECASE)
-_SEARCHES: OrderedDict[str, list[dict]] = OrderedDict()
-_SEARCH_LIMIT = 200
+_PICK_RE = re.compile(r"^(yt|sc)_(\d+)$")
+# chat_id -> {"query": str, "yt": list[dict], "sc": list[dict]}
+_RESULTS: dict[int, dict] = {}
 _LOCKS: dict[int, asyncio.Lock] = {}
+_TOO_BIG = "Трек слишком большой для Telegram. Попробуйте другой результат."
 
 START_TEXT = (
-    "Привет! Я помогу найти песню и прислать её в MP3.\n\n"
-    "Отправьте название — покажу до 5 вариантов.\n"
-    "Или пришлите публичную ссылку на YouTube, SoundCloud или другой открытый источник — "
-    "сразу скачаю аудио.\n\n"
-    "Из плейлиста беру только первые 5 треков.\n"
-    "Платный и закрытый контент не скачиваю.\n\n"
-    "Команда /help — подробнее о возможностях."
+    "Привет! Я найду песню и пришлю полный трек в MP3.\n\n"
+    "Напишите название — покажу до 5 вариантов с YouTube: "
+    "название, длительность и источник.\n"
+    "Если YouTube ничего не дал, ролик закрыт или файл слишком большой, "
+    "попробую тот же запрос на SoundCloud.\n\n"
+    "Можно сразу прислать ссылку на YouTube или SoundCloud.\n"
+    "Из плейлиста беру только первые 5 треков.\n\n"
+    "Команда /help — подробнее."
 )
 
 HELP_TEXT = (
     "Что я умею:\n\n"
-    "• искать трек по названию и показывать до 5 вариантов кнопками;\n"
-    "• скачивать аудио по публичной ссылке;\n"
-    "• присылать MP3 с названием и исполнителем;\n"
-    "• из плейлиста или альбома брать только первые 5 треков.\n\n"
+    "• искать трек на YouTube и показывать 5 кнопок с названием, длительностью и источником;\n"
+    "• если YouTube пуст, недоступен или файл больше 45 МБ — искать тот же запрос на SoundCloud;\n"
+    "• скачивать полный трек по ссылке YouTube или SoundCloud;\n"
+    "• присылать MP3 с названием, исполнителем и длительностью;\n"
+    "• из плейлиста брать только первые 5 треков.\n\n"
+    "Файл больше 45 МБ я перекодирую в 128 кбит/с. Обрезанный фрагмент не отправляю.\n\n"
     "Ограничения:\n\n"
-    "• только публичные источники;\n"
-    "• без обхода DRM и без платного или закрытого контента;\n"
-    "• файл больше 50 МБ не отправляю — выберите другой вариант.\n\n"
-    "Напишите название песни или пришлите ссылку."
+    "• только публичные записи;\n"
+    "• без обхода DRM и без платных подписок;\n"
+    "• закрытые ролики не скачиваю."
 )
 
 
@@ -87,7 +92,7 @@ def build_application(token: str) -> Application:
     )
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("help", help_command))
-    application.add_handler(CallbackQueryHandler(on_pick, pattern=r"^pick:"))
+    application.add_handler(CallbackQueryHandler(on_pick, pattern=r"^(yt|sc)_\d+$"))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, on_text))
     return application
 
@@ -107,15 +112,18 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
 
 
 async def on_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    del context
     message = update.message
     if message is None or not message.text:
         return
     text = message.text.strip()
     if not text:
-        await message.reply_text("Напишите название песни или пришлите публичную ссылку.")
+        await message.reply_text("Напишите название песни или пришлите ссылку YouTube или SoundCloud.")
         return
-
-    lock = _lock_for(update)
+    chat_id = _chat_id(update)
+    if chat_id is None:
+        return
+    lock = _lock_for(chat_id)
     if lock.locked():
         await message.reply_text("Подождите, я ещё обрабатываю предыдущий запрос.")
         return
@@ -123,13 +131,18 @@ async def on_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     async with lock:
         url = extract_url(text)
         if url:
+            if detect_source(url) is None:
+                await message.reply_text(
+                    "Нужна ссылка на YouTube или SoundCloud, либо название песни."
+                )
+                return
             logger.info("Прямая ссылка от пользователя")
-            await deliver(message, url)
+            await deliver_url(message, url, fallback_query=None)
             return
         if len(text) > 300:
             await message.reply_text("Слишком длинный запрос. Напишите название короче.")
             return
-        await offer_choices(message, text)
+        await offer_youtube(message, chat_id, text)
 
 
 async def on_pick(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -137,76 +150,95 @@ async def on_pick(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     query = update.callback_query
     if query is None:
         return
-    parsed = _parse_pick(query.data)
-    if parsed is None:
+    match = _PICK_RE.fullmatch(query.data or "")
+    if match is None:
         await query.answer("Эта кнопка больше не работает. Повторите поиск.", show_alert=True)
         return
-    token, index = parsed
-    results = _SEARCHES.get(token)
-    if results is None or index >= len(results):
+    kind, index_text = match.group(1), match.group(2)
+    index = int(index_text)
+    chat_id = _chat_id(update)
+    bucket = _RESULTS.get(chat_id) if chat_id is not None else None
+    results = (bucket or {}).get(kind) or []
+    if index >= len(results) or chat_id is None:
         await query.answer("Результат устарел. Повторите поиск.", show_alert=True)
         return
-
     message = query.message
     if message is None or not hasattr(message, "reply_audio"):
         await query.answer("Не могу отправить ответ на это сообщение.", show_alert=True)
         return
-
-    lock = _lock_for(update)
+    lock = _lock_for(chat_id)
     if lock.locked():
         await query.answer("Подождите, я ещё скачиваю предыдущий запрос.", show_alert=True)
         return
 
     await query.answer()
+    item = results[index]
+    text_query = str((bucket or {}).get("query") or item.get("title") or "")
     async with lock:
-        logger.info("Выбран результат %s", index + 1)
-        await deliver(message, results[index]["url"])
+        logger.info("Выбран результат %s_%s", kind, index)
+        await deliver_url(
+            message,
+            item["url"],
+            fallback_query=text_query if kind == "yt" else None,
+        )
 
 
-async def offer_choices(message, query: str) -> None:
-    status = await message.reply_text("Ищу…")
+async def offer_youtube(message, chat_id: int, query: str) -> None:
+    status = await message.reply_text("Ищу на YouTube…")
     try:
         results = await asyncio.to_thread(search_youtube, query)
+    except DownloadError as exc:
+        logger.info("Поиск YouTube не удался: %s", exc)
+        results = []
+    except Exception:
+        logger.info("Сбой поиска YouTube", exc_info=True)
+        results = []
+
+    if results:
+        _remember(chat_id, query, "yt", results)
+        await status.edit_text(
+            "Нашёл на YouTube. Выберите трек:",
+            reply_markup=_keyboard(results, "yt"),
+        )
+        return
+
+    await status.edit_text("На YouTube ничего нет. Ищу на SoundCloud…")
+    await _offer_soundcloud(message, chat_id, query, status)
+
+
+async def _offer_soundcloud(message, chat_id: int, query: str, status) -> None:
+    try:
+        results = await asyncio.to_thread(search_soundcloud, query)
     except DownloadError as exc:
         await status.edit_text(str(exc))
         return
     except Exception:
-        logger.info("Сбой поиска", exc_info=True)
+        logger.info("Сбой поиска SoundCloud", exc_info=True)
         await status.edit_text("Не удалось выполнить поиск. Попробуйте ещё раз чуть позже.")
         return
-
     if not results:
-        await status.edit_text("Ничего не нашёл. Попробуйте другое название.")
+        await status.edit_text("Ничего не нашёл ни на YouTube, ни на SoundCloud. Попробуйте другое название.")
         return
-
-    token = _remember(results)
-    keyboard = [
-        [
-            InlineKeyboardButton(
-                _button_title(item.get("title") or "Без названия"),
-                callback_data=f"pick:{token}:{index}",
-            )
-        ]
-        for index, item in enumerate(results)
-    ]
+    _remember(chat_id, query, "sc", results)
     await status.edit_text(
-        "Нашёл варианты. Выберите трек:",
-        reply_markup=InlineKeyboardMarkup(keyboard),
+        "Нашёл на SoundCloud. Выберите трек:",
+        reply_markup=_keyboard(results, "sc"),
     )
 
 
-async def deliver(message, url: str) -> None:
+async def deliver_url(message, url: str, fallback_query: str | None) -> None:
+    source = detect_source(url)
     status = await message.reply_text("Проверяю ссылку…")
     tmp = tempfile.mkdtemp(prefix="music-bot-")
     try:
         try:
-            targets = await asyncio.to_thread(resolve_audio_urls, url)
+            targets = await asyncio.to_thread(expand_targets, url)
         except DownloadError as exc:
-            await status.edit_text(str(exc))
+            await _fail_or_fallback(message, status, exc, source, fallback_query, tmp, url)
             return
         except Exception:
             logger.info("Сбой разбора ссылки", exc_info=True)
-            await status.edit_text("Не удалось разобрать ссылку. Попробуйте другую.")
+            await _safe_edit(status, "Не удалось разобрать ссылку. Попробуйте другую.")
             return
 
         total = len(targets)
@@ -216,10 +248,23 @@ async def deliver(message, url: str) -> None:
             await _safe_edit(status, progress)
             track_dir = os.path.join(tmp, str(index))
             os.makedirs(track_dir, exist_ok=True)
+            query = fallback_query
+            if total == 1 and not query and detect_source(target) == "youtube":
+                query = await asyncio.to_thread(lookup_title, target)
             try:
-                path, meta = await asyncio.to_thread(download_audio, target, track_dir)
-            except DownloadError as exc:
-                await message.reply_text(str(exc))
+                await _send_file(message, target, track_dir)
+            except (DownloadError, ValueError) as exc:
+                logger.info("Не удалось скачать трек: %s", exc)
+                if total == 1 and detect_source(target) == "youtube" and query:
+                    await message.reply_text("На YouTube не получилось. Ищу тот же запрос на SoundCloud…")
+                    try:
+                        if await _send_soundcloud_query(message, query, os.path.join(tmp, f"sc-{index}")):
+                            sent += 1
+                            continue
+                    except (DownloadError, ValueError) as fallback_exc:
+                        await message.reply_text(_user_text(fallback_exc))
+                        continue
+                await message.reply_text(_user_text(exc))
                 continue
             except Exception:
                 logger.info("Сбой скачивания", exc_info=True)
@@ -227,42 +272,82 @@ async def deliver(message, url: str) -> None:
                     "Не удалось получить аудио. Попробуйте другую ссылку или другой результат."
                 )
                 continue
-
-            size = os.path.getsize(path)
-            title = meta.get("title") or "Без названия"
-            if size > TELEGRAM_AUDIO_LIMIT:
-                await message.reply_text(
-                    f"Файл «{title}» больше 50 МБ, поэтому я не могу его отправить. "
-                    "Выберите другой результат или пришлите другую ссылку."
-                )
-                continue
-
-            try:
-                with open(path, "rb") as audio:
-                    await message.reply_audio(
-                        audio=audio,
-                        title=meta.get("title") or "Без названия",
-                        performer=meta.get("performer") or "Неизвестный исполнитель",
-                        read_timeout=120,
-                        write_timeout=300,
-                    )
-            except TelegramError:
-                logger.info("Telegram не принял аудио", exc_info=True)
-                await message.reply_text(
-                    f"Не удалось отправить «{title}». Попробуйте другой результат."
-                )
-                continue
             sent += 1
 
         if sent:
-            done = "Готово." if total == 1 else f"Готово: {sent} из {total}."
+            done = "Готово." if sent == 1 else f"Готово: {sent}."
             await _safe_edit(status, done)
-        elif total > 1:
-            await _safe_edit(status, "Не удалось отправить треки из плейлиста.")
         else:
             await _safe_edit(status, "Не удалось отправить аудио.")
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
+
+
+async def _fail_or_fallback(
+    message,
+    status,
+    exc: DownloadError,
+    source: str | None,
+    query: str | None,
+    tmp: str,
+    url: str,
+) -> None:
+    fallback = query
+    if source == "youtube" and not fallback:
+        fallback = await asyncio.to_thread(lookup_title, url)
+    if source == "youtube" and fallback:
+        await _safe_edit(status, "На YouTube не получилось. Ищу тот же запрос на SoundCloud…")
+        try:
+            found = await _send_soundcloud_query(message, fallback, os.path.join(tmp, "fallback"))
+        except (DownloadError, ValueError) as fallback_exc:
+            await _safe_edit(status, _user_text(fallback_exc))
+            return
+        if found:
+            await _safe_edit(status, "Готово.")
+            return
+    await _safe_edit(status, str(exc))
+
+
+async def _send_soundcloud_query(message, query: str, output_dir: str) -> bool:
+    try:
+        results = await asyncio.to_thread(search_soundcloud, query)
+    except DownloadError:
+        raise
+    except Exception:
+        logger.info("Сбой запасного поиска SoundCloud", exc_info=True)
+        return False
+    if not results:
+        return False
+    os.makedirs(output_dir, exist_ok=True)
+    last_error: Exception | None = None
+    for index, item in enumerate(results):
+        track_dir = os.path.join(output_dir, str(index))
+        os.makedirs(track_dir, exist_ok=True)
+        try:
+            await _send_file(message, item["url"], track_dir)
+            return True
+        except (DownloadError, ValueError) as exc:
+            last_error = exc
+            logger.info("SoundCloud вариант не подошёл: %s", exc)
+            continue
+    if last_error is not None:
+        raise last_error
+    return False
+
+
+async def _send_file(message, url: str, output_dir: str) -> None:
+    path, meta = await asyncio.to_thread(download_audio, url, output_dir)
+    path = await asyncio.to_thread(ensure_size_limit, path, 45)
+    duration = meta.get("duration")
+    with open(path, "rb") as audio:
+        await message.reply_audio(
+            audio=audio,
+            title=meta.get("title") or "Без названия",
+            performer=meta.get("performer") or "Неизвестный исполнитель",
+            duration=duration if isinstance(duration, int) and duration > 0 else None,
+            read_timeout=120,
+            write_timeout=300,
+        )
 
 
 def extract_url(text: str) -> str | None:
@@ -272,44 +357,73 @@ def extract_url(text: str) -> str | None:
     return match.group(0).rstrip(".,!?;:)]}>\"'")
 
 
-def _remember(results: list[dict]) -> str:
-    token = uuid.uuid4().hex[:8]
-    while token in _SEARCHES:
-        token = uuid.uuid4().hex[:8]
-    _SEARCHES[token] = results
-    _SEARCHES.move_to_end(token)
-    while len(_SEARCHES) > _SEARCH_LIMIT:
-        _SEARCHES.popitem(last=False)
-    return token
+def _remember(chat_id: int, query: str, kind: str, results: list[dict]) -> None:
+    bucket = _RESULTS.setdefault(chat_id, {"query": query, "yt": [], "sc": []})
+    bucket["query"] = query
+    bucket[kind] = results
+    while len(_RESULTS) > 200:
+        _RESULTS.pop(next(iter(_RESULTS)))
 
 
-def _parse_pick(data: str | None) -> tuple[str, int] | None:
-    if not data:
-        return None
-    parts = data.split(":")
-    if len(parts) != 3 or parts[0] != "pick" or not parts[2].isdigit():
-        return None
-    return parts[1], int(parts[2])
+def _keyboard(results: list[dict], kind: str) -> InlineKeyboardMarkup:
+    rows = [
+        [
+            InlineKeyboardButton(
+                _button_label(item),
+                callback_data=f"{kind}_{index}",
+            )
+        ]
+        for index, item in enumerate(results)
+    ]
+    return InlineKeyboardMarkup(rows)
 
 
-def _button_title(title: str) -> str:
-    cleaned = " ".join(title.split()) or "Без названия"
-    if len(cleaned) <= 60:
-        return cleaned
-    return cleaned[:59].rstrip() + "…"
+def _button_label(item: dict) -> str:
+    source = "YouTube" if item.get("source") == "youtube" else "SoundCloud"
+    duration = _format_duration(item.get("duration"))
+    suffix = f" · {duration} · {source}" if duration else f" · {source}"
+    title = " ".join(str(item.get("title") or "Без названия").split())
+    room = 60 - len(suffix)
+    if room < 8:
+        suffix = f" · {source}"
+        room = 60 - len(suffix)
+    if len(title) > room:
+        title = title[: max(room - 1, 1)].rstrip() + "…"
+    return (title + suffix)[:60]
 
 
-def _lock_for(update: Update) -> asyncio.Lock:
-    if update.effective_user is not None:
-        actor = update.effective_user.id
-    elif update.effective_chat is not None:
-        actor = update.effective_chat.id
-    else:
-        actor = 0
-    lock = _LOCKS.get(actor)
+def _format_duration(value: object) -> str:
+    if not isinstance(value, int) or value < 0:
+        return ""
+    minutes, seconds = divmod(value, 60)
+    hours, minutes = divmod(minutes, 60)
+    if hours:
+        return f"{hours}:{minutes:02d}:{seconds:02d}"
+    return f"{minutes}:{seconds:02d}"
+
+
+def _user_text(exc: Exception) -> str:
+    if isinstance(exc, ValueError):
+        text = str(exc)
+        if "слишком большой" in text:
+            return _TOO_BIG
+        return text or _TOO_BIG
+    if isinstance(exc, DownloadError):
+        return str(exc)
+    return explain_failure(exc)
+
+
+def _chat_id(update: Update) -> int | None:
+    if update.effective_chat is not None:
+        return update.effective_chat.id
+    return None
+
+
+def _lock_for(chat_id: int) -> asyncio.Lock:
+    lock = _LOCKS.get(chat_id)
     if lock is None:
         lock = asyncio.Lock()
-        _LOCKS[actor] = lock
+        _LOCKS[chat_id] = lock
     return lock
 
 

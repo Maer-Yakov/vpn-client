@@ -25,12 +25,15 @@ from telegram.ext import (
 
 from downloader import (
     DownloadError,
+    MetadataError,
+    catalog_service,
     detect_source,
     download_audio,
     ensure_size_limit,
     expand_targets,
     explain_failure,
     lookup_title,
+    read_share_metadata,
     search_soundcloud,
     search_youtube,
 )
@@ -51,6 +54,8 @@ START_TEXT = (
     "Если YouTube ничего не дал, ролик закрыт или файл слишком большой, "
     "попробую тот же запрос на SoundCloud.\n\n"
     "Можно сразу прислать ссылку на YouTube или SoundCloud.\n"
+    "Ссылку Spotify или Apple Music я не скачиваю: читаю только название и исполнителя, "
+    "а сам трек ищу на YouTube.\n"
     "Из плейлиста беру только первые 5 треков.\n\n"
     "Команда /help — подробнее."
 )
@@ -60,6 +65,8 @@ HELP_TEXT = (
     "• искать трек на YouTube и показывать 5 кнопок с названием, длительностью и источником;\n"
     "• если YouTube пуст, недоступен или файл больше 45 МБ — искать тот же запрос на SoundCloud;\n"
     "• скачивать полный трек по ссылке YouTube или SoundCloud;\n"
+    "• по ссылке Spotify или Apple Music читать только название и исполнителя, "
+    "а аудио искать на YouTube;\n"
     "• присылать MP3 с названием, исполнителем и длительностью;\n"
     "• из плейлиста брать только первые 5 треков.\n\n"
     "Файл больше 45 МБ я перекодирую в 128 кбит/с. Обрезанный фрагмент не отправляю.\n\n"
@@ -118,7 +125,9 @@ async def on_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         return
     text = message.text.strip()
     if not text:
-        await message.reply_text("Напишите название песни или пришлите ссылку YouTube или SoundCloud.")
+        await message.reply_text(
+            "Напишите название песни или пришлите ссылку YouTube, SoundCloud, Spotify или Apple Music."
+        )
         return
     chat_id = _chat_id(update)
     if chat_id is None:
@@ -131,9 +140,13 @@ async def on_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     async with lock:
         url = extract_url(text)
         if url:
+            if catalog_service(url):
+                logger.info("Ссылка каталога, только метаданные")
+                await deliver_catalog(message, url)
+                return
             if detect_source(url) is None:
                 await message.reply_text(
-                    "Нужна ссылка на YouTube или SoundCloud, либо название песни."
+                    "Нужна ссылка на YouTube, SoundCloud, Spotify или Apple Music, либо название песни."
                 )
                 return
             logger.info("Прямая ссылка от пользователя")
@@ -256,7 +269,11 @@ async def deliver_url(message, url: str, fallback_query: str | None) -> None:
             except (DownloadError, ValueError) as exc:
                 logger.info("Не удалось скачать трек: %s", exc)
                 if total == 1 and detect_source(target) == "youtube" and query:
-                    await message.reply_text("На YouTube не получилось. Ищу тот же запрос на SoundCloud…")
+                    if isinstance(exc, ValueError) and "слишком большой" in str(exc):
+                        notice = "Файл больше 45 МБ даже после сжатия. Ищу тот же запрос на SoundCloud…"
+                    else:
+                        notice = "На YouTube не получилось. Ищу тот же запрос на SoundCloud…"
+                    await message.reply_text(notice)
                     try:
                         if await _send_soundcloud_query(message, query, os.path.join(tmp, f"sc-{index}")):
                             sent += 1
@@ -335,9 +352,74 @@ async def _send_soundcloud_query(message, query: str, output_dir: str) -> bool:
     return False
 
 
+async def deliver_catalog(message, url: str) -> None:
+    status = await message.reply_text("Читаю название и исполнителя…")
+    try:
+        meta = await asyncio.to_thread(read_share_metadata, url)
+    except MetadataError as exc:
+        await _safe_edit(status, str(exc))
+        return
+    service = "Spotify" if meta["service"] == "spotify" else "Apple Music"
+    query = str(meta["query"])
+    await _safe_edit(
+        status,
+        f"Название и исполнитель взяты из {service}: {meta['artist']} — {meta['title']}. Ищу на YouTube…",
+    )
+    try:
+        results = await asyncio.to_thread(search_youtube, query)
+    except DownloadError as exc:
+        logger.info("Поиск YouTube по каталогу не удался: %s", exc)
+        results = []
+    except Exception:
+        logger.info("Сбой поиска YouTube по каталогу", exc_info=True)
+        results = []
+
+    tmp = tempfile.mkdtemp(prefix="music-bot-")
+    try:
+        if not results:
+            await message.reply_text("На YouTube ничего не нашлось. Ищу на SoundCloud…")
+            await _finish_catalog_on_soundcloud(message, status, service, query, tmp)
+            return
+        for index, item in enumerate(results):
+            track_dir = os.path.join(tmp, f"yt-{index}")
+            os.makedirs(track_dir, exist_ok=True)
+            try:
+                await _send_file(message, item["url"], track_dir)
+            except ValueError as exc:
+                if "слишком большой" in str(exc):
+                    await message.reply_text(
+                        "На YouTube трек больше 45 МБ даже после сжатия. Ищу на SoundCloud…"
+                    )
+                    await _finish_catalog_on_soundcloud(message, status, service, query, tmp)
+                    return
+            except DownloadError:
+                continue
+            else:
+                await _safe_edit(status, f"Готово. Название и исполнитель взяты из {service}.")
+                return
+        await message.reply_text("На YouTube не получилось скачать. Ищу на SoundCloud…")
+        await _finish_catalog_on_soundcloud(message, status, service, query, tmp)
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
+async def _finish_catalog_on_soundcloud(message, status, service: str, query: str, tmp: str) -> None:
+    try:
+        found = await _send_soundcloud_query(message, query, os.path.join(tmp, "sc"))
+    except (DownloadError, ValueError) as exc:
+        await _safe_edit(status, _user_text(exc))
+        return
+    if found:
+        await _safe_edit(status, f"Готово. Название взято из {service}, трек с SoundCloud.")
+        return
+    await _safe_edit(status, "Не нашёл этот трек ни на YouTube, ни на SoundCloud.")
+
+
 async def _send_file(message, url: str, output_dir: str) -> None:
     path, meta = await asyncio.to_thread(download_audio, url, output_dir)
     path = await asyncio.to_thread(ensure_size_limit, path, 45)
+    if detect_source(url) == "soundcloud":
+        await message.reply_text("Этот трек с SoundCloud.")
     duration = meta.get("duration")
     with open(path, "rb") as audio:
         await message.reply_audio(

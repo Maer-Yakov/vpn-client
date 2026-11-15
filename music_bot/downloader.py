@@ -7,13 +7,16 @@
 from __future__ import annotations
 
 import ipaddress
+import json
 import logging
 import os
 import re
 import shutil
 import subprocess
+import urllib.error
+import urllib.request
 from pathlib import Path
-from urllib.parse import parse_qs, urlparse
+from urllib.parse import parse_qs, quote, urlparse
 
 import yt_dlp
 from dotenv import load_dotenv
@@ -45,6 +48,10 @@ _INVALID_FILENAME = re.compile(r'[<>:"/\\|?*\x00-\x1f]')
 
 class DownloadError(Exception):
     """Ошибка, текст которой можно показать пользователю."""
+
+
+class MetadataError(Exception):
+    """Не удалось прочитать название трека. Аудио при этом не скачивается."""
 
 
 def search_youtube(query: str, limit: int = 5) -> list[dict]:
@@ -199,6 +206,37 @@ def lookup_title(url: str) -> str | None:
     return title
 
 
+def catalog_service(url: str) -> str | None:
+    """spotify или apple, если ссылка ведёт на эти каталоги. Иначе None."""
+    host = _hostname(url)
+    if host in {"open.spotify.com", "spotify.link", "spotify.com"} or host.endswith(".spotify.com"):
+        return "spotify"
+    if host in {
+        "music.apple.com",
+        "geo.music.apple.com",
+        "itunes.apple.com",
+        "embed.music.apple.com",
+        "embed.itunes.apple.com",
+    }:
+        return "apple"
+    return None
+
+
+def read_share_metadata(url: str) -> dict:
+    """Читает название и исполнителя по ссылке Spotify или Apple Music.
+
+    Аудио с этих сервисов не скачивается. Возвращает
+    {service, title, artist, query}, где query равен «{artist} - {title}».
+    """
+    service = catalog_service(url)
+    if service is None:
+        raise MetadataError("Нужна ссылка на трек Spotify или Apple Music.")
+    checked = _catalog_url(url)
+    if service == "spotify":
+        return _spotify_metadata(checked)
+    return _apple_metadata(checked)
+
+
 def detect_source(url: str) -> str | None:
     host = (urlparse(url).hostname or "").lower().removeprefix("www.")
     if host == "youtu.be" or host.endswith("youtube.com"):
@@ -218,6 +256,313 @@ def is_playlist_url(url: str) -> bool:
     if host.endswith(("youtube.com", "youtu.be")) and "list" in query and "v" not in query:
         return True
     return False
+
+
+def _spotify_metadata(url: str) -> dict:
+    current = url
+    kind = _spotify_kind(current)
+    if kind is None:
+        _, current = _http_get(current)
+        kind = _spotify_kind(current)
+    if kind == "other":
+        raise MetadataError(
+            "Это не ссылка на один трек Spotify. Пришлите ссылку на конкретную песню — я не выбираю трек наугад."
+        )
+    if kind != "track":
+        raise MetadataError("Не удалось понять ссылку Spotify. Пришлите прямую ссылку на трек.")
+    track_id = _spotify_track_id(current)
+    if not track_id:
+        raise MetadataError("Не удалось понять ссылку Spotify. Пришлите прямую ссылку на трек.")
+    title, artist = _spotify_oembed_credit(current)
+    if not title or not artist:
+        page, _ = _http_get(f"https://open.spotify.com/embed/track/{track_id}")
+        parsed = _parse_spotify_embed(page)
+        if parsed:
+            title = title or parsed[0]
+            artist = artist or parsed[1]
+    return _catalog_result("spotify", title, artist)
+
+
+def _apple_metadata(url: str) -> dict:
+    current = url
+    kind = _apple_kind(current)
+    if kind is None:
+        _, current = _http_get(current)
+        kind = _apple_kind(current)
+    if kind == "other":
+        raise MetadataError(
+            "Это не ссылка на один трек Apple Music. Пришлите ссылку на конкретную песню — я не выбираю трек наугад."
+        )
+    if kind != "song":
+        raise MetadataError("Не удалось понять ссылку Apple Music. Пришлите прямую ссылку на песню.")
+    page, final = _http_get(current)
+    parsed = _parse_apple_html(page, _apple_song_id(final) or _apple_song_id(current))
+    if parsed:
+        return _catalog_result("apple", parsed[0], parsed[1])
+    title, artist = _apple_oembed_credit(final or current)
+    if title and artist:
+        return _catalog_result("apple", title, artist)
+    raise MetadataError("Не удалось прочитать название и исполнителя на странице Apple Music.")
+
+
+def _catalog_result(service: str, title: object, artist: object) -> dict:
+    clean_title = _clean_share_text(title)
+    clean_artist = _clean_share_text(artist)
+    if not clean_title or not clean_artist:
+        source = "Spotify" if service == "spotify" else "Apple Music"
+        raise MetadataError(f"{source} не указал название или исполнителя. Я не подбираю трек наугад.")
+    query = f"{clean_artist} - {clean_title}"
+    return {"service": service, "title": clean_title, "artist": clean_artist, "query": query[:300]}
+
+
+def _split_credit(title: object, artist: object) -> tuple[str, str]:
+    clean_title = _clean_share_text(title)
+    clean_artist = _clean_share_text(artist)
+    if clean_title and clean_artist:
+        suffix = f" by {clean_artist}"
+        if clean_title.lower().endswith(suffix.lower()):
+            clean_title = clean_title[: -len(suffix)].strip(" -")
+        clean_title = re.sub(r"\s+-\s+Apple Music$", "", clean_title, flags=re.I).strip()
+    return clean_title, clean_artist
+
+
+def _spotify_oembed_credit(url: str) -> tuple[str, str]:
+    try:
+        body, _ = _http_get("https://open.spotify.com/oembed?url=" + quote(url, safe=""))
+        payload = json.loads(body)
+    except (MetadataError, json.JSONDecodeError):
+        return "", ""
+    if not isinstance(payload, dict):
+        return "", ""
+    return _clean_share_text(payload.get("title")), _clean_share_text(payload.get("author_name"))
+
+
+def _parse_spotify_embed(page: str) -> tuple[str, str] | None:
+    match = re.search(r'<script id="__NEXT_DATA__"[^>]*>(.*?)</script>', page, flags=re.I | re.S)
+    if not match:
+        return None
+    try:
+        payload = json.loads(match.group(1))
+    except json.JSONDecodeError:
+        return None
+    entity = payload.get("props", {}).get("pageProps", {}).get("state", {}).get("data", {}).get("entity")
+    if not isinstance(entity, dict) or str(entity.get("type") or "").lower() != "track":
+        return None
+    title = _clean_share_text(entity.get("title") or entity.get("name"))
+    artists = entity.get("artists")
+    names: list[str] = []
+    if isinstance(artists, list):
+        for item in artists:
+            if isinstance(item, dict):
+                name = _clean_share_text(item.get("name"))
+                if name:
+                    names.append(name)
+    artist = ", ".join(names)
+    if title and artist:
+        return title, artist
+    return None
+
+
+def _spotify_track_id(url: str) -> str:
+    match = re.search(r"/(?:intl-[a-z]{2}/)?track/([A-Za-z0-9]+)", urlparse(url).path, flags=re.I)
+    return match.group(1) if match else ""
+
+
+def _apple_oembed_credit(url: str) -> tuple[str, str]:
+    endpoint = "https://embed.music.apple.com/oembed?format=json&url=" + quote(url, safe="")
+    try:
+        body, _ = _http_get(endpoint)
+        payload = json.loads(body)
+    except (MetadataError, json.JSONDecodeError):
+        return "", ""
+    if not isinstance(payload, dict):
+        return "", ""
+    return _split_credit(payload.get("title"), payload.get("author_name"))
+
+
+def _apple_song_id(url: str) -> str:
+    parsed = urlparse(url)
+    song_ids = parse_qs(parsed.query).get("i") or []
+    if song_ids and song_ids[0].isdigit():
+        return song_ids[0]
+    match = re.search(r"/song/[^/]+/(\d+)", parsed.path, flags=re.I)
+    return match.group(1) if match else ""
+
+
+def _parse_apple_html(page: str, song_id: str = "") -> tuple[str, str] | None:
+    recordings: list[tuple[str, str, str]] = []
+    for block in re.findall(
+        r'<script[^>]+type=["\']application/ld\+json["\'][^>]*>(.*?)</script>',
+        page,
+        flags=re.I | re.S,
+    ):
+        try:
+            payload = json.loads(block)
+        except json.JSONDecodeError:
+            continue
+        recordings.extend(_collect_recordings(payload))
+    if song_id:
+        for title, artist, linked in recordings:
+            if song_id in linked:
+                return title, artist
+        if recordings and not any(song_id in linked for _, _, linked in recordings):
+            return None
+    if recordings:
+        return recordings[0][0], recordings[0][1]
+    title = _meta_content(page, "og:title") or _meta_content(page, "twitter:title")
+    artist = _meta_content(page, "music:musician") or _meta_content(page, "music:album:artist")
+    split_title, split_artist = _split_credit(title, artist)
+    if split_title and split_artist and not split_artist.startswith("http"):
+        return split_title, split_artist
+    if title and not artist:
+        match = re.search(
+            r"^(?P<title>.+?)\s+(?:-\s+Song\s+)?by\s+(?P<artist>.+?)(?:\s+-\s+Apple Music)?$",
+            _clean_share_text(title),
+            flags=re.I,
+        )
+        if match:
+            return match.group("title").strip(), match.group("artist").strip()
+    return None
+
+
+def _collect_recordings(node: object) -> list[tuple[str, str, str]]:
+    found: list[tuple[str, str, str]] = []
+    if isinstance(node, dict):
+        kind = node.get("@type")
+        kinds = kind if isinstance(kind, list) else [kind]
+        names = {str(item).lower() for item in kinds if item}
+        if names & {"musicrecording", "song"}:
+            title, artist = _split_credit(node.get("name"), _artist_name(node.get("byArtist")))
+            linked = " ".join(
+                _clean_share_text(node.get(key)) for key in ("url", "@id", "identifier") if node.get(key)
+            )
+            if title and artist:
+                found.append((title, artist, linked))
+        for value in node.values():
+            found.extend(_collect_recordings(value))
+    elif isinstance(node, list):
+        for item in node:
+            found.extend(_collect_recordings(item))
+    return found
+
+
+def _artist_name(value: object) -> str:
+    if isinstance(value, list):
+        names = [_artist_name(item) for item in value]
+        return ", ".join(name for name in names if name)
+    if isinstance(value, dict):
+        return _clean_share_text(value.get("name"))
+    return _clean_share_text(value)
+
+
+def _meta_content(page: str, key: str) -> str:
+    pattern = (
+        rf'<meta[^>]+(?:property|name)=["\']{re.escape(key)}["\'][^>]+content=["\'](.*?)["\']'
+        rf'|<meta[^>]+content=["\'](.*?)["\'][^>]+(?:property|name)=["\']{re.escape(key)}["\']'
+    )
+    match = re.search(pattern, page, flags=re.I | re.S)
+    if not match:
+        return ""
+    return _clean_share_text(match.group(1) or match.group(2) or "")
+
+
+def _spotify_kind(url: str) -> str | None:
+    path = urlparse(url).path.lower()
+    if re.search(r"/(?:intl-[a-z]{2}/)?track/[a-z0-9]+", path):
+        return "track"
+    if re.search(r"/(?:intl-[a-z]{2}/)?(album|playlist|artist|episode|show)/", path):
+        return "other"
+    return None
+
+
+def _apple_kind(url: str) -> str | None:
+    parsed = urlparse(url)
+    path = parsed.path.lower()
+    song_id = parse_qs(parsed.query).get("i")
+    if "/song/" in path:
+        return "song"
+    if "/album/" in path and song_id and song_id[0].isdigit():
+        return "song"
+    if any(part in path for part in ("/album/", "/playlist/", "/artist/", "/music-video/")):
+        return "other"
+    return None
+
+
+def _catalog_url(url: str) -> str:
+    raw = url.strip()
+    if len(raw) > 2000:
+        raise MetadataError("Слишком длинная ссылка.")
+    _ensure_catalog_url(raw)
+    return raw
+
+
+def _ensure_catalog_url(url: str) -> None:
+    parsed = urlparse(url)
+    if parsed.scheme != "https" or not parsed.hostname:
+        raise MetadataError("Нужна публичная ссылка https на Spotify или Apple Music.")
+    if parsed.username or parsed.password:
+        raise MetadataError("Ссылка с логином или паролем не подходит.")
+    host = _hostname(url)
+    if catalog_service(url) is None:
+        raise MetadataError("Ссылка ведёт не на Spotify или Apple Music.")
+    try:
+        ip = ipaddress.ip_address(host)
+    except ValueError:
+        ip = None
+    if ip is not None:
+        raise MetadataError("Ссылка ведёт не на Spotify или Apple Music.")
+
+
+def _http_get(url: str) -> tuple[str, str]:
+    _ensure_catalog_url(url)
+
+    class _Guard(urllib.request.HTTPRedirectHandler):
+        def redirect_request(self, req, fp, code, msg, headers, newurl):
+            _ensure_catalog_url(newurl)
+            return super().redirect_request(req, fp, code, msg, headers, newurl)
+
+    opener = urllib.request.build_opener(_Guard)
+    request = urllib.request.Request(
+        url,
+        headers={
+            "User-Agent": "Mozilla/5.0",
+            "Accept": "application/json,text/html;q=0.9",
+        },
+    )
+    try:
+        with opener.open(request, timeout=15) as response:
+            final = response.geturl()
+            _ensure_catalog_url(final)
+            raw = response.read(1_000_001)
+            status = getattr(response, "status", 200)
+    except MetadataError:
+        raise
+    except urllib.error.HTTPError as exc:
+        if exc.code == 404:
+            raise MetadataError("Страница трека не найдена. Проверьте ссылку.") from exc
+        if exc.code in {401, 403}:
+            raise MetadataError(
+                "Страница закрыта. Я читаю только публичные сведения и не скачиваю это аудио."
+            ) from exc
+        raise MetadataError("Не удалось прочитать страницу трека. Попробуйте другую ссылку.") from exc
+    except Exception as exc:
+        logger.info("Не удалось открыть страницу каталога: %s", exc)
+        raise MetadataError("Не удалось открыть ссылку. Попробуйте ещё раз чуть позже.") from exc
+    if status >= 400:
+        raise MetadataError("Не удалось прочитать страницу трека.")
+    if len(raw) > 1_000_000:
+        raise MetadataError("Страница слишком большая, название прочитать не удалось.")
+    return raw.decode("utf-8", errors="replace"), final
+
+
+def _hostname(url: str) -> str:
+    return (urlparse(url).hostname or "").lower().removeprefix("www.").rstrip(".")
+
+
+def _clean_share_text(value: object) -> str:
+    if not isinstance(value, str):
+        return ""
+    return " ".join(value.replace("\x00", "").split()).strip()
 
 
 def explain_failure(exc: BaseException) -> str:
